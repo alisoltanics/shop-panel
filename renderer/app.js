@@ -11,7 +11,7 @@ let currentImages = [];
 let currentVideo = '';
 let currentSizes = [];
 let currentAttrs = [];
-let currentVariantPrices = {};
+let currentVariants = {};
 let editingId = null;
 
 const money = (n) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
@@ -245,7 +245,7 @@ function openModal(product = null) {
   currentVideo = product?.video || '';
   currentSizes = product ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price })) : [];
   currentAttrs = (product?.attributes || []).map((a) => ({ name: a.name, optionsText: (a.options || []).join('، ') }));
-  currentVariantPrices = { ...(product?.variantPrices || {}) };
+  currentVariants = JSON.parse(JSON.stringify(product?.variants || {}));
 
   $('#modalTitle').textContent = product ? 'ویرایش محصول' : 'محصول جدید';
   $('#f-name').value = product?.name || '';
@@ -272,7 +272,7 @@ function closeModal() {
   currentVideo = '';
   currentSizes = [];
   currentAttrs = [];
-  currentVariantPrices = {};
+  currentVariants = {};
 }
 
 function renderThumbs() {
@@ -461,6 +461,21 @@ function renderAttrs() {
   });
 }
 
+function updateVariant(key, field, rawValue) {
+  const entry = { price: null, stock: null, dims: '', ...(currentVariants[key] || {}) };
+
+  if (field === 'dims') {
+    entry.dims = String(rawValue || '').trim();
+  } else if (field === 'stock') {
+    entry.stock = String(rawValue) === '' ? null : Math.max(0, Number(rawValue) || 0);
+  } else {
+    entry.price = Number(rawValue) > 0 ? Number(rawValue) : null;
+  }
+
+  if (entry.price === null && entry.stock === null && !entry.dims) delete currentVariants[key];
+  else currentVariants[key] = entry;
+}
+
 function renderVariants() {
   const section = $('#variantSection');
   const wrap = $('#variants');
@@ -479,6 +494,15 @@ function renderVariants() {
     return;
   }
 
+  const head = document.createElement('div');
+  head.className = 'variant-row variant-head';
+  ['ترکیب', 'قیمت (تومان)', 'موجودی', 'ابعاد (سانتی‌متر)'].forEach((text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    head.appendChild(span);
+  });
+  wrap.appendChild(head);
+
   combos.forEach((combo) => {
     const row = document.createElement('div');
     row.className = 'variant-row';
@@ -486,19 +510,30 @@ function renderVariants() {
     const label = document.createElement('span');
     label.textContent = combo.labels.join(' / ');
 
+    const current = currentVariants[combo.key] || {};
+
     const price = document.createElement('input');
     price.type = 'number';
     price.min = '0';
     price.step = '1000';
-    price.placeholder = 'قیمت (اختیاری)';
-    price.value = currentVariantPrices[combo.key] ?? '';
-    price.oninput = () => {
-      const value = Number(price.value);
-      if (value > 0) currentVariantPrices[combo.key] = value;
-      else delete currentVariantPrices[combo.key];
-    };
+    price.placeholder = 'قیمت';
+    price.value = current.price ?? '';
+    price.oninput = () => updateVariant(combo.key, 'price', price.value);
 
-    row.append(label, price);
+    const stock = document.createElement('input');
+    stock.type = 'number';
+    stock.min = '0';
+    stock.step = '1';
+    stock.placeholder = 'موجودی';
+    stock.value = current.stock ?? '';
+    stock.oninput = () => updateVariant(combo.key, 'stock', stock.value);
+
+    const dims = document.createElement('input');
+    dims.placeholder = 'مثلاً ۱۲۰×۱۸۰';
+    dims.value = current.dims || '';
+    dims.oninput = () => updateVariant(combo.key, 'dims', dims.value);
+
+    row.append(label, price, stock, dims);
     wrap.appendChild(row);
   });
 }
@@ -552,7 +587,12 @@ $('#btnSaveProduct').onclick = async () => {
     description: $('#f-description').value.trim(),
     sizes: currentSizes.filter((s) => String(s.label || '').trim()),
     attributes: parsedAttrs(),
-    variantPrices: { ...currentVariantPrices },
+    variants: { ...currentVariants },
+    variantPrices: Object.fromEntries(
+      Object.entries(currentVariants)
+        .filter(([, variant]) => Number(variant.price) > 0)
+        .map(([key, variant]) => [key, Number(variant.price)])
+    ),
     video: currentVideo,
     images: currentImages,
     active: $('#f-active').checked,
@@ -619,6 +659,7 @@ async function loadSettings() {
   $('#s-messenger').value = s.messenger || 'telegram';
   $('#s-botToken').value = s.botToken || '';
   $('#s-shopChatId').value = s.shopChatId || '';
+  $('#s-support').value = s.supportUsername || 'MeadowSupport';
   updateMessengerHelp();
 }
 
@@ -642,6 +683,7 @@ $('#btnSaveSettings').onclick = async () => {
     messenger: $('#s-messenger').value,
     botToken: $('#s-botToken').value,
     shopChatId: $('#s-shopChatId').value,
+    supportUsername: $('#s-support').value,
   });
   applyBotStatus(botStatus);
   toast('تنظیمات ذخیره شد');

@@ -100,7 +100,7 @@ function check(label, condition, extra = '') {
       { name: 'شکل', options: ['دایره‌ای', 'مستطیلی'] },
       { name: 'ظرفیت', options: ['۴ نفره', '۶ نفره'] },
     ],
-    variantPrices: { '1-1': 250000 },
+    variants: { '1-1': { price: 250000, stock: 5, dims: '۲۰۰×۱۵۰' } },
   });
 
   let stockChanged = 0;
@@ -128,6 +128,7 @@ function check(label, condition, extra = '') {
   const cartMsg = fake.sent[fake.sent.length - 1];
   check('cart shows options', cartMsg.text.includes('مستطیلی') && cartMsg.text.includes('۶ نفره'), cartMsg.text);
   check('cart price uses combination price', cartMsg.text.includes('۲۵۰'), cartMsg.text);
+  check('cart shows variant dimensions', cartMsg.text.includes('۲۰۰×۱۵۰'), cartMsg.text);
 
   await cb('checkout');
   await msg('علی رضایی');
@@ -152,8 +153,16 @@ function check(label, condition, extra = '') {
   const doneData = shopOrderMsg?.options.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data;
   check('finalize button present', String(doneData).startsWith('done:'), String(doneData));
 
+  const userConfirm = fake.sent.find(
+    (m) => m.chatId === 42 && m.options?.reply_markup?.inline_keyboard?.[0]?.[0]?.url
+  );
+  const supportUrl = userConfirm?.options.reply_markup.inline_keyboard[0][0].url || '';
+  check('support button opens MeadowSupport chat', supportUrl.startsWith('https://t.me/MeadowSupport?text='), supportUrl);
+  check('support message prefilled', decodeURIComponent(supportUrl).includes('نهایی کردن سفارش'), supportUrl);
+
   await cb(doneData, 999, { username: 'shop' });
   check('stock decremented', store.getProduct(product.id).stock === 2, String(store.getProduct(product.id).stock));
+  check('variant stock decremented', store.getProduct(product.id).variants['1-1'].stock === 4, String(store.getProduct(product.id).variants['1-1'].stock));
   check('order marked done', store.getOrder(order.id)?.status === 'done');
   check('app notified of stock change', stockChanged === 1, String(stockChanged));
 

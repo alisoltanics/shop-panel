@@ -69,6 +69,22 @@ class Store {
         }))
         .filter((a) => a.name && a.options.length);
       if (!p.variantPrices || typeof p.variantPrices !== 'object') p.variantPrices = {};
+      if (!p.variants || typeof p.variants !== 'object') {
+        p.variants = {};
+        for (const [key, price] of Object.entries(p.variantPrices)) {
+          if (Number(price) > 0) p.variants[key] = { price: Number(price), stock: null, dims: '' };
+        }
+        changed = true;
+      }
+      for (const variant of Object.values(p.variants)) {
+        if (!variant || typeof variant !== 'object') continue;
+        variant.price = Number(variant.price) > 0 ? Number(variant.price) : null;
+        variant.stock =
+          variant.stock === null || variant.stock === undefined || variant.stock === ''
+            ? null
+            : Math.max(0, Number(variant.stock) || 0);
+        variant.dims = String(variant.dims || '').trim();
+      }
     }
     if (changed) this.save();
   }
@@ -111,6 +127,24 @@ class Store {
         Object.entries(input.variantPrices && typeof input.variantPrices === 'object' ? input.variantPrices : {})
           .map(([key, value]) => [String(key), Number(value)])
           .filter(([, value]) => value > 0)
+      ),
+      variants: Object.fromEntries(
+        Object.entries(input.variants && typeof input.variants === 'object' ? input.variants : {})
+          .map(([key, variant]) => {
+            const stock =
+              variant?.stock === null || variant?.stock === undefined || variant?.stock === ''
+                ? null
+                : Math.max(0, Number(variant.stock) || 0);
+            return [
+              String(key),
+              {
+                price: Number(variant?.price) > 0 ? Number(variant.price) : null,
+                stock,
+                dims: String(variant?.dims || '').trim(),
+              },
+            ];
+          })
+          .filter(([, variant]) => variant.price !== null || variant.stock !== null || variant.dims)
       ),
       colors: Array.isArray(input.colors)
         ? input.colors.map((c) => String(c).trim()).filter(Boolean)
@@ -225,10 +259,15 @@ class Store {
 
     for (const item of order.items) {
       const product = this.data.products.find((p) => p.id === Number(item.productId));
-      if (product) {
-        product.stock = Math.max(0, Number(product.stock || 0) - Number(item.qty || 0));
-        product.updatedAt = Date.now();
+      if (!product) continue;
+
+      const variant = item.variantKey ? product.variants?.[item.variantKey] : null;
+      if (variant && variant.stock !== null && variant.stock !== undefined) {
+        variant.stock = Math.max(0, Number(variant.stock) - Number(item.qty || 0));
       }
+
+      product.stock = Math.max(0, Number(product.stock || 0) - Number(item.qty || 0));
+      product.updatedAt = Date.now();
     }
 
     order.status = 'done';
@@ -269,6 +308,7 @@ class Store {
       note: '',
       messenger: 'telegram',
       shippingPrice: 0,
+      supportUsername: 'MeadowSupport',
       ...this.data.settings,
     };
   }
@@ -282,6 +322,7 @@ class Store {
       note: String(input.note || '').trim(),
       messenger: input.messenger === 'bale' ? 'bale' : 'telegram',
       shippingPrice: Math.max(0, Number(input.shippingPrice) || 0),
+      supportUsername: String(input.supportUsername || 'MeadowSupport').replace(/^@/, '').trim(),
     };
     this.save();
     return this.getSettings();

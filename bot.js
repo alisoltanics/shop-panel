@@ -42,9 +42,26 @@ function attributesOf(product) {
 
 /** اولویت قیمت: قیمت ترکیب گزینه‌ها ← قیمت بُعد ← قیمت پایه */
 function priceFor(product, sizeLabel, indices = []) {
-  const combo = Number(product.variantPrices?.[(indices || []).join('-')]);
+  const key = (indices || []).join('-');
+  const variantPrice = Number(product.variants?.[key]?.price);
+  if (variantPrice > 0) return variantPrice;
+  const combo = Number(product.variantPrices?.[key]);
   if (combo > 0) return combo;
   return priceOf(product, sizeLabel);
+}
+
+function variantOf(product, indices = []) {
+  const key = (indices || []).join('-');
+  const variant = product.variants?.[key];
+  if (variant && typeof variant === 'object') {
+    return {
+      key,
+      price: Number(variant.price) > 0 ? Number(variant.price) : null,
+      stock: variant.stock === null || variant.stock === undefined ? null : Number(variant.stock),
+      dims: String(variant.dims || '').trim(),
+    };
+  }
+  return { key, price: null, stock: null, dims: '' };
 }
 
 function productCaption(product) {
@@ -112,6 +129,8 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         size: item.size || '',
         options: item.options || [],
         indices: item.indices || [],
+        variantKey: item.variantKey || '',
+        dims: item.dims || '',
         qty: item.qty,
         unitPrice: priceFor(product, item.size, item.indices),
       });
@@ -243,14 +262,30 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
     const parts = [item.product.name];
     if (item.size) parts.push(`بُعد: ${item.size}`);
     if (item.options?.length) parts.push(`گزینه‌ها: ${item.options.join(' / ')}`);
+    if (item.dims) parts.push(`ابعاد: ${item.dims}`);
     return `${index + 1}) ${esc(parts.join(' — '))} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
   }
 
   async function addToCart(chatId, product, size, indices, labels) {
+    const variant = variantOf(product, indices);
     const cart = cartOf(chatId);
     const key = `${product.id}|${size}|${(indices || []).join('-')}`;
     const entry = cart.get(key);
-    cart.set(key, { id: product.id, size, indices: indices || [], options: labels || [], qty: (entry?.qty || 0) + 1 });
+
+    if (variant.stock !== null && variant.stock <= (entry?.qty || 0)) {
+      pickers.delete(chatId);
+      return bot.sendMessage(chatId, '⚠️ موجودی این گزینه تمام شده است.');
+    }
+
+    cart.set(key, {
+      id: product.id,
+      size,
+      indices: indices || [],
+      options: labels || [],
+      variantKey: variant.key,
+      dims: variant.dims,
+      qty: (entry?.qty || 0) + 1,
+    });
     pickers.delete(chatId);
     const v = cartView(chatId);
     return bot.sendMessage(chatId, v.text, v.opts);
@@ -334,7 +369,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         (i, n) =>
           `${n + 1}) ${esc(i.name)}${i.size ? ` — بُعد: ${esc(i.size)}` : ''}${
             i.options?.length ? ` — گزینه‌ها: ${esc(i.options.join(' / '))}` : ''
-          } × ${i.qty} = ${money(i.unitPrice * i.qty)}`
+          }${i.dims ? ` — ابعاد: ${esc(i.dims)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
       ),
       '',
       `� هزینه ارسال: ${Number(order.shipping) > 0 ? money(order.shipping) : 'رایگان'}`,
@@ -458,6 +493,8 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         name: i.product.name,
         size: i.size || null,
         options: i.options || [],
+        variantKey: i.variantKey || '',
+        dims: i.dims || '',
         qty: i.qty,
         unitPrice: i.unitPrice,
       })),
@@ -469,18 +506,26 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
 
     const sent = await sendOrderToShop(order);
 
+    // دکمه لینک: چت پشتیبانی فروشگاه با پیام آماده باز می‌شود
+    const support = String(store.getSettings().supportUsername || 'MeadowSupport').replace(/^@/, '').trim();
+    const supportText = `سلام، برای نهایی کردن سفارش #${order.code} پیام می‌دهم.\nمبلغ کل: ${money(order.total)}`;
+    const supportUrl =
+      messenger === 'bale'
+        ? `https://ble.ir/${support}`
+        : `https://t.me/${support}?text=${encodeURIComponent(supportText)}`;
+
     await bot.sendMessage(
       chatId,
       [
         `✅ سفارش شما با کد <b>#${order.code}</b> ثبت شد و برای فروشگاه ارسال شد.`,
         '',
-        'برای نهایی کردن خرید، با دکمه زیر به فروشگاه پیام بدهید:',
+        'برای نهایی کردن خرید، با دکمه زیر به فروشگاه پیام بدهید (متن آماده است، فقط ارسال کنید):',
       ].join('\n'),
       {
         parse_mode: 'HTML',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '📨 ارسال پیام به فروشگاه برای نهایی کردن سفارش', callback_data: `notify:${order.id}` }],
+            [{ text: '📨 ارسال پیام به فروشگاه برای نهایی کردن سفارش', url: supportUrl }],
           ],
         },
       }

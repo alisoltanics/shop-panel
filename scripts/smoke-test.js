@@ -66,7 +66,9 @@ app.whenReady().then(async () => {
       attrOptions.dispatchEvent(new Event('input'));
     }
     out.attrRows = document.querySelectorAll('.attr-row').length;
-    out.variantRows = document.querySelectorAll('.variant-row').length;
+    out.variantRows = document.querySelectorAll('.variant-row:not(.variant-head)').length;
+    out.variantInputs = document.querySelectorAll('.variant-row:not(.variant-head) input').length;
+    out.hasSupportField = !!document.getElementById('s-support');
 
     document.getElementById('modal').classList.add('hidden');
 
@@ -103,6 +105,8 @@ app.whenReady().then(async () => {
     result.sizeRows === 1 &&
     result.attrRows === 1 &&
     result.variantRows === 2 &&
+    result.variantInputs === 6 &&
+    result.hasSupportField &&
     consoleErrors.length === 0;
 
   console.log('SMOKE RESULT', JSON.stringify({ ...result, consoleErrors }));

@@ -73,6 +73,10 @@
           </label>
           <label>توکن ربات <input id="s-botToken" type="password" placeholder="123456:ABC-DEF…" /></label>
           <label>چت آیدی فروشگاه <input id="s-shopChatId" placeholder="مثلاً 123456789" /></label>
+          <label>
+            یوزرنیم پشتیبانی (دکمه نهایی‌سازی سفارش)
+            <input id="s-support" placeholder="MeadowSupport (بدون @)" />
+          </label>
           <div class="row">
             <button class="btn primary" id="btnSaveSettings">ذخیره تنظیمات</button>
             <button class="btn" id="btnBotStart">▶️ روشن کردن ربات</button>
@@ -146,7 +150,7 @@
 
           <div class="sizes-section hidden" id="variantSection">
             <div class="images-head">
-              <span>قیمت ترکیب گزینه‌ها — خالی یعنی قیمت پایه/بُعد</span>
+              <span>برای هر ترکیب: قیمت (اختیاری) / موجودی / ابعاد به سانتی‌متر</span>
             </div>
             <div id="variants" class="variant-list"></div>
           </div>

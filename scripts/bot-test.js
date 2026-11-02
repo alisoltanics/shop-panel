@@ -91,7 +91,7 @@ function check(label, condition, extra = '') {
 (async () => {
   const file = path.join(os.tmpdir(), `shop-bot-test-${Date.now()}.json`);
   const store = new Store(file);
-  store.saveSettings({ shopName: 'فروشگاه تست', botToken: 'x', shopChatId: '999' });
+  store.saveSettings({ shopName: 'فروشگاه تست', botToken: 'x', shopChatId: '999', shippingPrice: 25000 });
   const product = store.saveProduct({
     name: 'رومیزی تست',
     price: 100000,
@@ -135,17 +135,19 @@ function check(label, condition, extra = '') {
   await msg('1234567890');
   await msg('تهران، خیابان ولیعصر، پلاک ۱');
 
-  const order = store.listOrders ? null : store.data.orders[0];
+  const order = store.data.orders[0];
   check('order saved', !!order);
   check('order has postal code', order?.customer.postalCode === '1234567890');
   check('order item has size options', order?.items[0].options.join('/') === 'مستطیلی/۶ نفره');
-  check('order total', order?.total === 250000, String(order?.total));
+  check('order shipping applied', order?.shipping === 25000, String(order?.shipping));
+  check('order total includes shipping', order?.total === 275000, String(order?.total));
   check('customer saved for next orders', store.getCustomer(42)?.name === 'علی رضایی');
 
   const shopOrderMsg = fake.sent.find((m) => String(m.chatId) === '999');
   check('order sent to shop', !!shopOrderMsg);
   check('shop message has postal code', shopOrderMsg?.text.includes('کد پستی'));
   check('shop message has quantity', shopOrderMsg?.text.includes('× 1'));
+  check('shop message has shipping', shopOrderMsg?.text.includes('هزینه ارسال'));
 
   const doneData = shopOrderMsg?.options.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data;
   check('finalize button present', String(doneData).startsWith('done:'), String(doneData));

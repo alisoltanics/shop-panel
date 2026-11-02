@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   listCategories: () => ipcRenderer.invoke('categories:list'),
   addCategory: (name) => ipcRenderer.invoke('categories:add', name),
   removeCategory: (name) => ipcRenderer.invoke('categories:remove', name),
+  listOrders: () => ipcRenderer.invoke('orders:list'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   botStart: () => ipcRenderer.invoke('bot:start'),

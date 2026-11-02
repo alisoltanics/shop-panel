@@ -190,15 +190,18 @@ class Store {
 
   /* ---------- سفارش‌ها ---------- */
 
-  createOrder({ chatId, customer, items }) {
-    const total = items.reduce((sum, i) => sum + Number(i.unitPrice || 0) * Number(i.qty || 0), 0);
+  createOrder({ chatId, customer, items, shipping = 0 }) {
+    const itemsTotal = items.reduce((sum, i) => sum + Number(i.unitPrice || 0) * Number(i.qty || 0), 0);
+    const shippingFee = Math.max(0, Number(shipping) || 0);
     const order = {
       id: ++this.data.nextOrderId,
       code: String(Date.now()).slice(-6),
       chatId: String(chatId),
       customer,
       items,
-      total,
+      itemsTotal,
+      shipping: shippingFee,
+      total: itemsTotal + shippingFee,
       status: 'pending',
       createdAt: Date.now(),
     };
@@ -209,6 +212,10 @@ class Store {
 
   getOrder(id) {
     return this.data.orders.find((o) => o.id === Number(id)) || null;
+  }
+
+  listOrders() {
+    return [...this.data.orders].sort((a, b) => b.id - a.id);
   }
 
   /** سفارش را نهایی می‌کند و موجودی محصولات را کاهش می‌دهد. */
@@ -255,7 +262,15 @@ class Store {
   }
 
   getSettings() {
-    return { shopName: '', botToken: '', shopChatId: '', note: '', ...this.data.settings };
+    return {
+      shopName: '',
+      botToken: '',
+      shopChatId: '',
+      note: '',
+      messenger: 'telegram',
+      shippingPrice: 0,
+      ...this.data.settings,
+    };
   }
 
   saveSettings(input = {}) {
@@ -265,6 +280,8 @@ class Store {
       botToken: String(input.botToken || '').trim(),
       shopChatId: String(input.shopChatId || '').trim(),
       note: String(input.note || '').trim(),
+      messenger: input.messenger === 'bale' ? 'bale' : 'telegram',
+      shippingPrice: Math.max(0, Number(input.shippingPrice) || 0),
     };
     this.save();
     return this.getSettings();

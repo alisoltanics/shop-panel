@@ -32,8 +32,38 @@ document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
     document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === `panel-${tab.dataset.tab}`));
+    if (tab.dataset.tab === 'orders') loadOrders();
   });
 });
+
+/* ---------------- دیالوگ ورودی متن (جایگزین prompt در Electron) ---------------- */
+function askText(title, placeholder = '', initial = '') {
+  return new Promise((resolve) => {
+    $('#textModalTitle').textContent = title;
+    const input = $('#textModalInput');
+    input.placeholder = placeholder;
+    input.value = initial;
+    $('#textModal').classList.remove('hidden');
+    setTimeout(() => input.focus(), 60);
+
+    const finish = (value) => {
+      $('#textModal').classList.add('hidden');
+      $('#textModalOk').onclick = null;
+      $('#textModalCancel').onclick = null;
+      $('#textModalClose').onclick = null;
+      input.onkeydown = null;
+      resolve(value);
+    };
+
+    $('#textModalOk').onclick = () => finish(input.value.trim() || null);
+    $('#textModalCancel').onclick = () => finish(null);
+    $('#textModalClose').onclick = () => finish(null);
+    input.onkeydown = (event) => {
+      if (event.key === 'Enter') finish(input.value.trim() || null);
+      if (event.key === 'Escape') finish(null);
+    };
+  });
+}
 
 /* ---------------- داده‌ها ---------------- */
 async function loadProducts() {
@@ -497,12 +527,17 @@ $('#btnAddVideo').onclick = async () => {
 };
 
 $('#btnNewCat').onclick = async () => {
-  const name = prompt('نام دسته جدید:');
-  if (!name || !name.trim()) return;
-  categories = await api.addCategory(name);
-  fillCategorySelect(name.trim());
-  renderCategories();
-  toast('دسته اضافه شد');
+  const name = await askText('دسته‌بندی جدید', 'مثلاً کاور مبل');
+  if (!name) return;
+  try {
+    categories = await api.addCategory(name);
+    fillCategorySelect(name);
+    renderCategories();
+    renderGrid();
+    toast('دسته اضافه شد');
+  } catch (err) {
+    toast(err.message || 'خطا در افزودن دسته', true);
+  }
 };
 
 $('#btnSaveProduct').onclick = async () => {
@@ -564,12 +599,27 @@ $('#newCategory').addEventListener('keydown', (e) => {
 });
 
 /* ---------------- تنظیمات و ربات ---------------- */
+const MESSENGER_HELP = {
+  telegram:
+    '۱) در تلگرام به @BotFather پیام بدهید، دستور /newbot را بزنید و توکن ربات را کپی کنید. ۲) با اکانت تلگرام فروشگاه، ربات را باز کنید، /start بدهید و بعد /id بفرستید؛ عددی که نشان می‌دهد «چت آیدی فروشگاه» است. ۳) توکن و چت آیدی را همین‌جا وارد و ذخیره کنید؛ ربات خودکار روشن می‌شود.',
+  bale:
+    '۱) در پیام‌رسان بله به @BotFather پیام بدهید، ربات بسازید و توکن را کپی کنید. ۲) با اکانت بله فروشگاه، همان ربات را باز کنید، /start بدهید و سپس /id بفرستید تا «چت آیدی فروشگاه» را بگیرید. ۳) پیام‌رسان را روی «بله» بگذارید، توکن و چت آیدی را ذخیره کنید.',
+};
+
+function updateMessengerHelp() {
+  const messenger = $('#s-messenger').value === 'bale' ? 'bale' : 'telegram';
+  $('#messengerHelp').textContent = MESSENGER_HELP[messenger];
+}
+
 async function loadSettings() {
   const s = await api.getSettings();
   $('#s-shopName').value = s.shopName || '';
   $('#s-note').value = s.note || '';
+  $('#s-shipping').value = s.shippingPrice || 0;
+  $('#s-messenger').value = s.messenger || 'telegram';
   $('#s-botToken').value = s.botToken || '';
   $('#s-shopChatId').value = s.shopChatId || '';
+  updateMessengerHelp();
 }
 
 function applyBotStatus(status) {
@@ -582,10 +632,14 @@ function applyBotStatus(status) {
   text.textContent = `وضعیت: ${status.message || '—'}`;
 }
 
+$('#s-messenger').addEventListener('change', updateMessengerHelp);
+
 $('#btnSaveSettings').onclick = async () => {
   const { botStatus } = await api.saveSettings({
     shopName: $('#s-shopName').value,
     note: $('#s-note').value,
+    shippingPrice: $('#s-shipping').value,
+    messenger: $('#s-messenger').value,
     botToken: $('#s-botToken').value,
     shopChatId: $('#s-shopChatId').value,
   });
@@ -605,6 +659,70 @@ $('#btnBotStop').onclick = async () => {
   toast('ربات خاموش شد');
 };
 
+/* ---------------- سفارش‌ها ---------------- */
+function formatDate(ts) {
+  try {
+    return new Date(ts).toLocaleString('fa-IR');
+  } catch {
+    return '';
+  }
+}
+
+function renderOrders(orders) {
+  const wrap = $('#ordersList');
+  wrap.innerHTML = '';
+  $('#ordersEmpty').classList.toggle('hidden', orders.length > 0);
+
+  orders.forEach((order) => {
+    const card = document.createElement('article');
+    card.className = 'order-card';
+
+    const head = document.createElement('div');
+    head.className = 'order-head';
+    const code = document.createElement('div');
+    code.className = 'order-code';
+    code.textContent = `سفارش #${order.code}`;
+    const badge = document.createElement('span');
+    badge.className = `badge ${order.status === 'done' ? 'ok' : 'pending'}`;
+    badge.textContent = order.status === 'done' ? 'نهایی شده' : 'در انتظار';
+    head.append(code, badge);
+
+    const meta = document.createElement('div');
+    meta.className = 'order-meta';
+    meta.textContent = `${formatDate(order.createdAt)} — ${order.customer.name} — ${order.customer.phone}`;
+
+    const addr = document.createElement('div');
+    addr.className = 'order-addr';
+    addr.textContent = `📍 ${order.customer.address} — کد پستی: ${order.customer.postalCode}`;
+
+    const list = document.createElement('ul');
+    list.className = 'order-items';
+    order.items.forEach((item) => {
+      const li = document.createElement('li');
+      const extra = [item.size, ...(item.options || [])].filter(Boolean).join(' / ');
+      li.textContent = `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
+      list.appendChild(li);
+    });
+
+    const total = document.createElement('div');
+    total.className = 'order-total';
+    total.textContent = `🚚 ارسال: ${order.shipping > 0 ? money(order.shipping) : 'رایگان'} | 💰 جمع کل: ${money(order.total)}`;
+
+    card.append(head, meta, addr, list, total);
+    wrap.appendChild(card);
+  });
+}
+
+async function loadOrders() {
+  try {
+    renderOrders(await api.listOrders());
+  } catch (err) {
+    toast(err.message || 'خطا در دریافت سفارش‌ها', true);
+  }
+}
+
+$('#btnRefreshOrders').onclick = loadOrders;
+
 api.onBotStatus(applyBotStatus);
 api.onProductsChanged(() => {
   loadProducts();
@@ -617,6 +735,7 @@ $('#btnOpenData').onclick = () => api.openDataDir();
   await loadCategories();
   await loadProducts();
   await loadSettings();
+  await loadOrders();
   try {
     const info = await api.getAppInfo();
     $('#appVersion').textContent = info.version;

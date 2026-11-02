@@ -61,6 +61,7 @@ async function startBotFromSettings() {
   try {
     bot = await startBot({
       token: botToken,
+      messenger: store.getSettings().messenger,
       store,
       imagesDir: imagesDir(),
       videosDir: videosDir(),
@@ -236,6 +237,8 @@ function registerIpc() {
   ipcMain.handle('categories:list', () => store.listCategories());
   ipcMain.handle('categories:add', (_e, name) => store.addCategory(name));
   ipcMain.handle('categories:remove', (_e, name) => store.removeCategory(name));
+
+  ipcMain.handle('orders:list', () => store.listOrders());
 
   ipcMain.handle('settings:get', () => store.getSettings());
 

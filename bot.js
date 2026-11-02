@@ -68,8 +68,9 @@ function productCaption(product) {
   return lines.join('\n');
 }
 
-async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onStatus, onStockChanged }) {
-  const bot = new TelegramClient(token);
+async function startBot({ token, messenger = 'telegram', store, imagesDir, videosDir, getShopChatId, onStatus, onStockChanged }) {
+  const baseUrl = messenger === 'bale' ? `https://tapi.bale.ai/bot${String(token).trim()}` : undefined;
+  const bot = new TelegramClient(token, { baseUrl });
 
   let me;
   try {
@@ -83,6 +84,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
 
   const shopName = () => store.getSettings().shopName || 'فروشگاه';
   const shopChatId = () => String(getShopChatId() || '').trim();
+  const shippingFee = () => Math.max(0, Number(store.getSettings().shippingPrice) || 0);
 
   const shopTarget = () => {
     const value = shopChatId();
@@ -224,8 +226,11 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
     ]);
     rows.push([{ text: '➕ ادامه خرید', callback_data: 'pg:0' }, { text: '✅ ثبت سفارش', callback_data: 'checkout' }]);
 
+    const shipping = shippingFee();
     return {
-      text: `🧺 <b>سبد خرید شما</b>\n\n${lines.join('\n')}\n\n💰 جمع کل: <b>${money(total)}</b>`,
+      text: `🧺 <b>سبد خرید شما</b>\n\n${lines.join('\n')}\n\n🚚 ارسال: ${
+        shipping > 0 ? money(shipping) : 'رایگان'
+      }\n💰 قابل پرداخت: <b>${money(total + shipping)}</b>`,
       opts: { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } },
     };
   }
@@ -332,7 +337,8 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
           } × ${i.qty} = ${money(i.unitPrice * i.qty)}`
       ),
       '',
-      `💰 جمع کل: <b>${money(order.total)}</b>`,
+      `� هزینه ارسال: ${Number(order.shipping) > 0 ? money(order.shipping) : 'رایگان'}`,
+      `�💰 جمع کل: <b>${money(order.total)}</b>`,
       '',
       `🆔 چت مشتری: <code>${order.chatId}</code>`,
     ].join('\n');
@@ -397,11 +403,13 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
     const items = cartItems(chatId);
     const total = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
     const lines = items.map(cartLine);
+    const shipping = shippingFee();
     return [
       '🧾 <b>بازبینی سفارش</b>',
       '',
       ...lines,
-      `💰 جمع کل: <b>${money(total)}</b>`,
+      `🚚 ارسال: ${shipping > 0 ? money(shipping) : 'رایگان'}`,
+      `💰 مبلغ کل: <b>${money(total + shipping)}</b>`,
       '',
       '📋 <b>اطلاعات شما</b>',
       `👤 ${esc(customer.name)}`,
@@ -453,6 +461,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
         qty: i.qty,
         unitPrice: i.unitPrice,
       })),
+      shipping: shippingFee(),
     });
     store.saveCustomer(chatId, customer);
     carts.delete(chatId);
@@ -528,7 +537,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
             '/start — منوی اصلی',
             '/id — نمایش چت آیدی شما',
             '',
-            'برای خرید: محصول را انتخاب کنید، بُعد مورد نظر را بزنید تا به سبد اضافه شود، سپس «ثبت سفارش» را بزنید.',
+            'برای خرید: محصول را انتخاب کنید، ابعاد و ویژگی‌های مورد نظر را بزنید تا به سبد اضافه شود، سپس «ثبت سفارش» را بزنید.',
           ].join('\n'),
           { parse_mode: 'HTML', reply_markup: MENU }
         );

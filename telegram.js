@@ -23,9 +23,9 @@ const MIME = {
 };
 
 class TelegramClient {
-  constructor(token) {
+  constructor(token, options = {}) {
     this.token = String(token || '').trim();
-    this.base = `https://api.telegram.org/bot${this.token}`;
+    this.base = options.baseUrl || `https://api.telegram.org/bot${this.token}`;
     this.handlers = {};
     this.running = false;
     this.offset = 0;

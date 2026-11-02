@@ -232,8 +232,7 @@ textarea { resize: vertical; }
 .video-box video { width: 220px; border-radius: 10px; border: 1px solid var(--line); background: #000; }
 .video-file { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 
-.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.chip {
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }.chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -267,6 +266,20 @@ textarea { resize: vertical; }
 }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.error { border-color: #7f1d1d; background: #2a1010; }
+
+/* سفارش‌ها */
+.orders { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
+.order-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.order-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.order-code { font-weight: 700; }
+.badge { font-size: 11.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid; }
+.badge.pending { color: #fcd34d; border-color: #4d3b09; background: #2a2108; }
+.badge.ok { color: #86efac; border-color: #14532d; background: #0d2a1a; }
+.order-meta, .order-addr { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.order-items { margin: 10px 0 8px; padding-inline-start: 18px; font-size: 13px; line-height: 1.9; }
+.order-total { font-size: 13px; border-top: 1px solid var(--line); padding-top: 8px; }
+
+.modal-box.compact { max-width: 460px; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: #2a323d; border-radius: 8px; }

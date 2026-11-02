@@ -12,6 +12,9 @@ const consoleErrors = [];
 
 ipcMain.handle('products:list', () => []);
 ipcMain.handle('categories:list', () => ['رومیزی', 'کاور مبل']);
+ipcMain.handle('categories:add', (_e, name) => ['رومیزی', 'کاور مبل', name]);
+ipcMain.handle('categories:remove', () => ['رومیزی']);
+ipcMain.handle('orders:list', () => []);
 ipcMain.handle('settings:get', () => ({ shopName: '', botToken: '', shopChatId: '', note: '' }));
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), dataDir: '/tmp', platform: process.platform }));
 ipcMain.handle('bot:start', () => ({ running: false, message: 'test' }));
@@ -35,7 +38,7 @@ app.whenReady().then(async () => {
   await win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   await new Promise((resolve) => setTimeout(resolve, 600));
 
-  const result = await win.webContents.executeJavaScript(`(() => {
+  const result = await win.webContents.executeJavaScript(`(async () => {
     const out = { hasApi: !!window.api, tabs: 0, settingsVisible: false, clickedButtons: 0 };
     document.querySelectorAll('.tab').forEach(() => out.tabs++);
     const settingsTab = document.querySelector('[data-tab="settings"]');
@@ -64,18 +67,39 @@ app.whenReady().then(async () => {
     }
     out.attrRows = document.querySelectorAll('.attr-row').length;
     out.variantRows = document.querySelectorAll('.variant-row').length;
+
+    document.getElementById('modal').classList.add('hidden');
+
+    document.querySelector('[data-tab="settings"]').click();
+    const newCategory = document.getElementById('newCategory');
+    newCategory.value = 'پرده';
+    document.getElementById('btnAddCategory').click();
+    out.clickedButtons++;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    out.categoryChipsAfterAdd = document.querySelectorAll('#categoryList .chip').length;
+
+    document.querySelector('[data-tab="orders"]').click();
+    out.ordersVisible = document.getElementById('panel-orders').classList.contains('active');
+    out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
+    out.hasShippingField = !!document.getElementById('s-shipping');
+    out.hasMessengerSelect = document.getElementById('s-messenger').options.length === 2;
     return out;
   })()`);
 
   const ok =
     result.hasApi &&
-    result.tabs === 2 &&
+    result.tabs === 3 &&
     result.settingsVisible &&
     result.modalOpened &&
     result.hasSizeEditor &&
     result.hasVideoPicker &&
     result.categoryOptions >= 3 &&
     result.categoryChips === 2 &&
+    result.categoryChipsAfterAdd === 3 &&
+    result.ordersVisible &&
+    result.ordersEmptyShown &&
+    result.hasShippingField &&
+    result.hasMessengerSelect &&
     result.sizeRows === 1 &&
     result.attrRows === 1 &&
     result.variantRows === 2 &&

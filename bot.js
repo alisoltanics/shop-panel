@@ -34,6 +34,19 @@ function priceOf(product, sizeLabel) {
   return Number(product.price) || 0;
 }
 
+function attributesOf(product) {
+  return Array.isArray(product.attributes)
+    ? product.attributes.filter((a) => a && a.name && Array.isArray(a.options) && a.options.length)
+    : [];
+}
+
+/** اولویت قیمت: قیمت ترکیب گزینه‌ها ← قیمت بُعد ← قیمت پایه */
+function priceFor(product, sizeLabel, indices = []) {
+  const combo = Number(product.variantPrices?.[(indices || []).join('-')]);
+  if (combo > 0) return combo;
+  return priceOf(product, sizeLabel);
+}
+
 function productCaption(product) {
   const sizes = sizesOf(product);
   const lines = [`<b>${esc(product.name)}</b>`];
@@ -41,10 +54,15 @@ function productCaption(product) {
   if (product.material) lines.push(`🧵 جنس: ${esc(product.material)}`);
   if (product.colors?.length) lines.push(`🎨 رنگ‌ها: ${esc(product.colors.join('، '))}`);
   if (sizes.length) lines.push(`📏 ابعاد: ${esc(sizes.map((s) => s.label).join(' | '))}`);
+  attributesOf(product).forEach((attr) => lines.push(`⚙️ ${esc(attr.name)}: ${esc(attr.options.join(' | '))}`));
   lines.push(`📦 موجودی: ${Number(product.stock) || 0}`);
   if (product.description) lines.push('', esc(product.description));
 
-  const prices = [Number(product.price) || 0, ...sizes.map((s) => Number(s.price) || 0)].filter((p) => p > 0);
+  const prices = [
+    Number(product.price) || 0,
+    ...sizes.map((s) => Number(s.price) || 0),
+    ...Object.values(product.variantPrices || {}).map((v) => Number(v) || 0),
+  ].filter((p) => p > 0);
   const perSize = sizes.some((s) => Number(s.price) > 0);
   lines.push('', `💰 <b>${money(prices.length ? Math.min(...prices) : 0)}</b>${perSize ? ' (بسته به بُعد)' : ''}`);
   return lines.join('\n');
@@ -86,7 +104,15 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
         cart.delete(key);
         continue;
       }
-      items.push({ key, product, size: item.size || '', qty: item.qty, unitPrice: priceOf(product, item.size) });
+      items.push({
+        key,
+        product,
+        size: item.size || '',
+        options: item.options || [],
+        indices: item.indices || [],
+        qty: item.qty,
+        unitPrice: priceFor(product, item.size, item.indices),
+      });
     }
     return items;
   };
@@ -118,7 +144,11 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
     const rows = list
       .slice(current * perPage, current * perPage + perPage)
       .map((p) => {
-        const prices = [Number(p.price) || 0, ...sizesOf(p).map((s) => Number(s.price) || 0)].filter((v) => v > 0);
+        const prices = [
+          Number(p.price) || 0,
+          ...sizesOf(p).map((s) => Number(s.price) || 0),
+          ...Object.values(p.variantPrices || {}).map((v) => Number(v) || 0),
+        ].filter((v) => v > 0);
         const cheapest = prices.length ? Math.min(...prices) : 0;
         return [{ text: `${p.name} | ${money(cheapest)}`, callback_data: `p:${p.id}` }];
       });
@@ -142,15 +172,15 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
     const product = store.getProduct(id);
     if (!product) return bot.sendMessage(chatId, 'محصول پیدا نشد.');
 
-    const sizes = sizesOf(product);
-    const rows = sizes.length
-      ? sizes.map((size, index) => [
-          {
-            text: `➕ ${size.label} — ${money(Number(size.price) > 0 ? size.price : product.price)}`,
-            callback_data: `add:${product.id}:${index}`,
-          },
-        ])
-      : [[{ text: '➕ افزودن به سبد', callback_data: `add:${product.id}:` }]];
+    const hasChoices = sizesOf(product).length > 0 || attributesOf(product).length > 0;
+    const rows = [
+      [
+        {
+          text: hasChoices ? '➕ انتخاب گزینه‌ها و افزودن' : '➕ افزودن به سبد',
+          callback_data: `pick:${product.id}`,
+        },
+      ],
+    ];
     rows.push([{ text: '🧺 سبد خرید', callback_data: 'cart' }, { text: '🔙 محصولات', callback_data: 'pg:0' }]);
     const keyboard = { inline_keyboard: rows };
 
@@ -188,10 +218,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
     }
 
     const total = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
-    const lines = items.map(
-      (i, n) =>
-        `${n + 1}) ${esc(i.product.name)}${i.size ? ` — ${esc(i.size)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
-    );
+    const lines = items.map(cartLine);
     const rows = items.map((i, n) => [
       { text: `❌ حذف ${i.product.name}${i.size ? ` (${i.size})` : ''}`, callback_data: `rm:${n}` },
     ]);
@@ -201,6 +228,88 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
       text: `🧺 <b>سبد خرید شما</b>\n\n${lines.join('\n')}\n\n💰 جمع کل: <b>${money(total)}</b>`,
       opts: { parse_mode: 'HTML', reply_markup: { inline_keyboard: rows } },
     };
+  }
+
+  /* ------------------------- انتخاب گزینه‌ها ------------------------- */
+
+  const pickers = new Map(); // chatId -> { productId, sizeIndex, sizeLabel, attrIndex, indices, labels }
+
+  function cartLine(item, index) {
+    const parts = [item.product.name];
+    if (item.size) parts.push(`بُعد: ${item.size}`);
+    if (item.options?.length) parts.push(`گزینه‌ها: ${item.options.join(' / ')}`);
+    return `${index + 1}) ${esc(parts.join(' — '))} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
+  }
+
+  async function addToCart(chatId, product, size, indices, labels) {
+    const cart = cartOf(chatId);
+    const key = `${product.id}|${size}|${(indices || []).join('-')}`;
+    const entry = cart.get(key);
+    cart.set(key, { id: product.id, size, indices: indices || [], options: labels || [], qty: (entry?.qty || 0) + 1 });
+    pickers.delete(chatId);
+    const v = cartView(chatId);
+    return bot.sendMessage(chatId, v.text, v.opts);
+  }
+
+  async function sendAttributeStep(chatId) {
+    const picker = pickers.get(chatId);
+    if (!picker) return bot.sendMessage(chatId, 'برای دیدن محصولات /start را بزنید.', { reply_markup: MENU });
+
+    const product = store.getProduct(picker.productId);
+    if (!product) {
+      pickers.delete(chatId);
+      return bot.sendMessage(chatId, 'محصول پیدا نشد.');
+    }
+
+    const attrs = attributesOf(product);
+    if (picker.attrIndex >= attrs.length) {
+      return addToCart(chatId, product, picker.sizeLabel, picker.indices, picker.labels);
+    }
+
+    const attr = attrs[picker.attrIndex];
+    const rows = attr.options.map((option, index) => [
+      { text: option, callback_data: `o:${product.id}:${picker.attrIndex}:${index}` },
+    ]);
+    rows.push([{ text: '✕ انصراف', callback_data: 'pg:0' }]);
+
+    return bot.sendMessage(chatId, `⚙️ <b>${esc(attr.name)}</b> را انتخاب کنید:`, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: rows },
+    });
+  }
+
+  async function startPick(chatId, productId, sizeIndex = null) {
+    const product = store.getProduct(productId);
+    if (!product || product.active === false) return bot.sendMessage(chatId, 'این محصول موجود نیست.');
+
+    const sizes = sizesOf(product);
+    const attrs = attributesOf(product);
+    if (!sizes.length && !attrs.length) return addToCart(chatId, product, '', [], []);
+
+    const picker = { productId: product.id, sizeIndex: -1, sizeLabel: '', attrIndex: 0, indices: [], labels: [] };
+    pickers.set(chatId, picker);
+
+    if (typeof sizeIndex === 'number' && sizeIndex >= 0 && sizes[sizeIndex]) {
+      picker.sizeIndex = sizeIndex;
+      picker.sizeLabel = sizes[sizeIndex].label;
+      return sendAttributeStep(chatId);
+    }
+
+    if (sizes.length) {
+      const rows = sizes.map((size, index) => [
+        {
+          text: `${size.label} — ${money(Number(size.price) > 0 ? size.price : product.price)}`,
+          callback_data: `s:${product.id}:${index}`,
+        },
+      ]);
+      rows.push([{ text: '✕ انصراف', callback_data: 'pg:0' }]);
+      return bot.sendMessage(chatId, `📏 <b>${esc(product.name)}</b>\nبُعد را انتخاب کنید:`, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: rows },
+      });
+    }
+
+    return sendAttributeStep(chatId);
   }
 
   /* ------------------------- سفارش ------------------------- */
@@ -218,7 +327,9 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
       '<b>اقلام سفارش:</b>',
       ...order.items.map(
         (i, n) =>
-          `${n + 1}) ${esc(i.name)}${i.size ? ` — بُعد: ${esc(i.size)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
+          `${n + 1}) ${esc(i.name)}${i.size ? ` — بُعد: ${esc(i.size)}` : ''}${
+            i.options?.length ? ` — گزینه‌ها: ${esc(i.options.join(' / '))}` : ''
+          } × ${i.qty} = ${money(i.unitPrice * i.qty)}`
       ),
       '',
       `💰 جمع کل: <b>${money(order.total)}</b>`,
@@ -255,7 +366,8 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
       const file = path.join(imagesDir, image);
       if (!fs.existsSync(file)) continue;
       try {
-        await bot.sendPhoto(shopTarget(), file, { caption: `${item.name}${item.size ? ` — ${item.size}` : ''} × ${item.qty}` });
+        const extra = [item.size, ...(item.options || [])].filter(Boolean).join(' / ');
+        await bot.sendPhoto(shopTarget(), file, { caption: `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty}` });
       } catch {}
     }
     return true;
@@ -284,10 +396,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
   function customerSummary(chatId, customer) {
     const items = cartItems(chatId);
     const total = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
-    const lines = items.map(
-      (i, n) =>
-        `${n + 1}) ${esc(i.product.name)}${i.size ? ` — ${esc(i.size)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
-    );
+    const lines = items.map(cartLine);
     return [
       '🧾 <b>بازبینی سفارش</b>',
       '',
@@ -340,6 +449,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
         productId: i.product.id,
         name: i.product.name,
         size: i.size || null,
+        options: i.options || [],
         qty: i.qty,
         unitPrice: i.unitPrice,
       })),
@@ -473,7 +583,7 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
 
   bot.on('callback_query', async (q) => {
     const chatId = q.message?.chat?.id;
-    const [action, arg1, arg2] = String(q.data || '').split(':');
+    const [action, arg1, arg2, arg3] = String(q.data || '').split(':');
     if (!chatId) return;
 
     try {
@@ -490,26 +600,50 @@ async function startBot({ token, store, imagesDir, videosDir, getShopChatId, onS
         return sendProduct(chatId, arg1);
       }
 
-      if (action === 'add') {
+      if (action === 'pick' || action === 'add') {
+        await bot.answerCallbackQuery(q.id);
+        const sizeIndex = action === 'add' && arg2 !== '' && arg2 !== undefined ? Number(arg2) : null;
+        return startPick(chatId, arg1, sizeIndex);
+      }
+
+      if (action === 's') {
+        const picker = pickers.get(chatId);
         const product = store.getProduct(arg1);
-        if (!product || product.active === false) {
-          return bot.answerCallbackQuery(q.id, { text: 'این محصول موجود نیست', show_alert: true });
+        if (!picker || !product || picker.productId !== product.id) {
+          await bot.answerCallbackQuery(q.id, { text: 'دوباره محصول را انتخاب کنید' });
+          return startPick(chatId, arg1);
         }
         const sizes = sizesOf(product);
-        const sizeIndex = arg2 === '' || arg2 === undefined ? -1 : Number(arg2);
-        const size = sizes[sizeIndex]?.label || '';
-        if (sizes.length && !size) {
-          return bot.answerCallbackQuery(q.id, { text: 'ابتدا بُعد مورد نظر را انتخاب کنید', show_alert: true });
+        const index = Number(arg2);
+        if (!sizes[index]) return bot.answerCallbackQuery(q.id, { text: 'گزینه نامعتبر' });
+
+        picker.sizeIndex = index;
+        picker.sizeLabel = sizes[index].label;
+        await bot.answerCallbackQuery(q.id, { text: sizes[index].label });
+        return sendAttributeStep(chatId);
+      }
+
+      if (action === 'o') {
+        const picker = pickers.get(chatId);
+        const product = store.getProduct(arg1);
+        if (!picker || !product || picker.productId !== product.id) {
+          await bot.answerCallbackQuery(q.id, { text: 'دوباره محصول را انتخاب کنید' });
+          return startPick(chatId, arg1);
         }
 
-        const cart = cartOf(chatId);
-        const key = `${product.id}|${size}`;
-        const entry = cart.get(key);
-        cart.set(key, { id: product.id, size, qty: (entry?.qty || 0) + 1 });
+        const attrs = attributesOf(product);
+        const attrIndex = Number(arg2);
+        const optionIndex = Number(arg3);
+        const attr = attrs[attrIndex];
+        if (!attr || !attr.options[optionIndex]) {
+          return bot.answerCallbackQuery(q.id, { text: 'گزینه نامعتبر' });
+        }
 
-        await bot.answerCallbackQuery(q.id, { text: 'به سبد اضافه شد ✅' });
-        const v = cartView(chatId);
-        return bot.sendMessage(chatId, v.text, v.opts);
+        picker.indices[attrIndex] = optionIndex;
+        picker.labels[attrIndex] = attr.options[optionIndex];
+        picker.attrIndex = attrIndex + 1;
+        await bot.answerCallbackQuery(q.id, { text: attr.options[optionIndex] });
+        return sendAttributeStep(chatId);
       }
 
       if (action === 'rm') {

@@ -51,6 +51,19 @@ app.whenReady().then(async () => {
     const addSize = document.getElementById('btnAddSize');
     if (addSize) { addSize.click(); out.clickedButtons++; }
     out.sizeRows = document.querySelectorAll('.size-row').length;
+
+    const addAttr = document.getElementById('btnAddAttr');
+    if (addAttr) { addAttr.click(); out.clickedButtons++; }
+    const attrName = document.querySelector('.attr-row .attr-name');
+    const attrOptions = document.querySelector('.attr-row .attr-options');
+    if (attrName && attrOptions) {
+      attrName.value = 'شکل';
+      attrName.dispatchEvent(new Event('input'));
+      attrOptions.value = 'دایره‌ای، مستطیلی';
+      attrOptions.dispatchEvent(new Event('input'));
+    }
+    out.attrRows = document.querySelectorAll('.attr-row').length;
+    out.variantRows = document.querySelectorAll('.variant-row').length;
     return out;
   })()`);
 
@@ -64,6 +77,8 @@ app.whenReady().then(async () => {
     result.categoryOptions >= 3 &&
     result.categoryChips === 2 &&
     result.sizeRows === 1 &&
+    result.attrRows === 1 &&
+    result.variantRows === 2 &&
     consoleErrors.length === 0;
 
   console.log('SMOKE RESULT', JSON.stringify({ ...result, consoleErrors }));

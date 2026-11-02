@@ -58,6 +58,17 @@ class Store {
         }))
         .filter((s) => s.label);
       if (typeof p.video !== 'string') p.video = '';
+      if (!Array.isArray(p.attributes)) {
+        p.attributes = [];
+        changed = true;
+      }
+      p.attributes = p.attributes
+        .map((a) => ({
+          name: String(a?.name ?? '').trim(),
+          options: (Array.isArray(a?.options) ? a.options : []).map((o) => String(o ?? '').trim()).filter(Boolean),
+        }))
+        .filter((a) => a.name && a.options.length);
+      if (!p.variantPrices || typeof p.variantPrices !== 'object') p.variantPrices = {};
     }
     if (changed) this.save();
   }
@@ -90,6 +101,17 @@ class Store {
         }))
         .filter((s) => s.label),
       video: String(input.video || '').trim(),
+      attributes: (Array.isArray(input.attributes) ? input.attributes : [])
+        .map((a) => ({
+          name: String(a?.name ?? '').trim(),
+          options: (Array.isArray(a?.options) ? a.options : []).map((o) => String(o ?? '').trim()).filter(Boolean),
+        }))
+        .filter((a) => a.name && a.options.length),
+      variantPrices: Object.fromEntries(
+        Object.entries(input.variantPrices && typeof input.variantPrices === 'object' ? input.variantPrices : {})
+          .map(([key, value]) => [String(key), Number(value)])
+          .filter(([, value]) => value > 0)
+      ),
       colors: Array.isArray(input.colors)
         ? input.colors.map((c) => String(c).trim()).filter(Boolean)
         : String(input.colors || '')

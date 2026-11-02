@@ -10,6 +10,8 @@ let categories = [];
 let currentImages = [];
 let currentVideo = '';
 let currentSizes = [];
+let currentAttrs = [];
+let currentVariantPrices = {};
 let editingId = null;
 
 const money = (n) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
@@ -146,6 +148,7 @@ function renderGrid() {
       p.active === false ? '⛔ غیرفعال' : '✅ فعال',
       `${p.images?.length || 0} عکس`,
       sizeCount ? `${sizeCount} بُعد` : '',
+      (p.attributes || []).length ? `${(p.attributes || []).length} ویژگی` : '',
       p.video ? '🎬 ویدیو' : '',
     ].filter(Boolean);
     parts.forEach((text) => {
@@ -211,6 +214,8 @@ function openModal(product = null) {
   currentImages = product ? [...(product.images || [])] : [];
   currentVideo = product?.video || '';
   currentSizes = product ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price })) : [];
+  currentAttrs = (product?.attributes || []).map((a) => ({ name: a.name, optionsText: (a.options || []).join('، ') }));
+  currentVariantPrices = { ...(product?.variantPrices || {}) };
 
   $('#modalTitle').textContent = product ? 'ویرایش محصول' : 'محصول جدید';
   $('#f-name').value = product?.name || '';
@@ -225,6 +230,8 @@ function openModal(product = null) {
   renderThumbs();
   renderVideo();
   renderSizes();
+  renderAttrs();
+  renderVariants();
   $('#modal').classList.remove('hidden');
 }
 
@@ -234,6 +241,8 @@ function closeModal() {
   currentImages = [];
   currentVideo = '';
   currentSizes = [];
+  currentAttrs = [];
+  currentVariantPrices = {};
 }
 
 function renderThumbs() {
@@ -346,6 +355,130 @@ $('#btnAddSize').onclick = () => {
   renderSizes();
 };
 
+/* ---------------- ویژگی‌ها و قیمت ترکیب گزینه‌ها ---------------- */
+function parsedAttrs() {
+  return currentAttrs
+    .map((a) => ({
+      name: String(a.name || '').trim(),
+      options: String(a.optionsText || '')
+        .split(/[,،]/)
+        .map((o) => o.trim())
+        .filter(Boolean),
+    }))
+    .filter((a) => a.name && a.options.length);
+}
+
+function combosOf(attrs) {
+  let combos = [{ key: '', labels: [] }];
+  for (const attr of attrs) {
+    const next = [];
+    for (const combo of combos) {
+      attr.options.forEach((option, index) => {
+        next.push({ key: combo.key ? `${combo.key}-${index}` : String(index), labels: [...combo.labels, option] });
+      });
+    }
+    combos = next;
+    if (combos.length > 60) return [];
+  }
+  return combos;
+}
+
+function renderAttrs() {
+  const wrap = $('#attrs');
+  wrap.innerHTML = '';
+  if (!currentAttrs.length) {
+    const hint = document.createElement('p');
+    hint.className = 'hint small';
+    hint.textContent = 'بدون ویژگی — می‌توانید مثل «شکل» یا «ظرفیت» اضافه کنید.';
+    wrap.appendChild(hint);
+    return;
+  }
+
+  currentAttrs.forEach((attr, index) => {
+    const row = document.createElement('div');
+    row.className = 'attr-row';
+
+    const name = document.createElement('input');
+    name.className = 'attr-name';
+    name.placeholder = 'نام ویژگی';
+    name.value = attr.name || '';
+    name.oninput = () => {
+      currentAttrs[index].name = name.value;
+      renderVariants();
+    };
+
+    const options = document.createElement('input');
+    options.className = 'attr-options';
+    options.placeholder = 'گزینه‌ها با کاما: دایره‌ای، مستطیلی';
+    options.value = attr.optionsText || '';
+    options.oninput = () => {
+      currentAttrs[index].optionsText = options.value;
+      renderVariants();
+    };
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn small danger-ghost';
+    remove.textContent = '✕';
+    remove.onclick = () => {
+      currentAttrs.splice(index, 1);
+      renderAttrs();
+      renderVariants();
+    };
+
+    row.append(name, options, remove);
+    wrap.appendChild(row);
+  });
+}
+
+function renderVariants() {
+  const section = $('#variantSection');
+  const wrap = $('#variants');
+  wrap.innerHTML = '';
+
+  const attrs = parsedAttrs();
+  if (!attrs.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+
+  const combos = combosOf(attrs);
+  if (!combos.length) {
+    wrap.innerHTML = '<p class="hint small">تعداد ترکیب‌ها زیاد است؛ قیمت همه گزینه‌ها از قیمت پایه/بُعد استفاده می‌کند.</p>';
+    return;
+  }
+
+  combos.forEach((combo) => {
+    const row = document.createElement('div');
+    row.className = 'variant-row';
+
+    const label = document.createElement('span');
+    label.textContent = combo.labels.join(' / ');
+
+    const price = document.createElement('input');
+    price.type = 'number';
+    price.min = '0';
+    price.step = '1000';
+    price.placeholder = 'قیمت (اختیاری)';
+    price.value = currentVariantPrices[combo.key] ?? '';
+    price.oninput = () => {
+      const value = Number(price.value);
+      if (value > 0) currentVariantPrices[combo.key] = value;
+      else delete currentVariantPrices[combo.key];
+    };
+
+    row.append(label, price);
+    wrap.appendChild(row);
+  });
+}
+
+$('#btnAddAttr').onclick = () => {
+  currentAttrs.push({ name: '', optionsText: '' });
+  renderAttrs();
+  renderVariants();
+};
+
 $('#btnAddImages').onclick = async () => {
   const picked = await api.pickImages();
   if (picked.length) {
@@ -383,6 +516,8 @@ $('#btnSaveProduct').onclick = async () => {
     colors: $('#f-colors').value,
     description: $('#f-description').value.trim(),
     sizes: currentSizes.filter((s) => String(s.label || '').trim()),
+    attributes: parsedAttrs(),
+    variantPrices: { ...currentVariantPrices },
     video: currentVideo,
     images: currentImages,
     active: $('#f-active').checked,

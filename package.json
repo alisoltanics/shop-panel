@@ -25,7 +25,8 @@
     "dist:win": "electron-builder --win",
     "install:desktop": "bash scripts/install-desktop.sh",
     "uninstall:desktop": "bash scripts/uninstall-desktop.sh",
-    "test:smoke": "electron scripts/smoke-test.js"
+    "test:smoke": "electron scripts/smoke-test.js",
+    "test:bot": "node scripts/bot-test.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

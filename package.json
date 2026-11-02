@@ -1,0 +1,105 @@
+{
+  "name": "shop-panel",
+  "version": "1.0.0",
+  "description": "پنل مدیریت محصولات فروشگاه + ربات تلگرام سفارش‌گیری",
+  "main": "main.js",
+  "author": {
+    "name": "Ali Soltani",
+    "email": "alisoltanics@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/alisoltanics/shop-panel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alisoltanics/shop-panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alisoltanics/shop-panel/issues"
+  },
+  "scripts": {
+    "start": "electron .",
+    "icon": "python3 scripts/make-icon.py",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux",
+    "dist:win": "electron-builder --win",
+    "install:desktop": "bash scripts/install-desktop.sh",
+    "uninstall:desktop": "bash scripts/uninstall-desktop.sh"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ir.alisoltani.shoppanel",
+    "productName": "ShopPanel",
+    "copyright": "Copyright © 2026 Ali Soltani",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "bot.js",
+      "telegram.js",
+      "store.js",
+      "renderer/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "synopsis": "مدیریت محصولات فروشگاه و ربات تلگرام",
+      "description": "پنل دسکتاپ مدیریت محصولات فروشگاه (رومیزی، کاور مبل و ...) همراه با ربات تلگرام سفارش‌گیری.",
+      "vendor": "Ali Soltani",
+      "maintainer": "Ali Soltani <alisoltanics@gmail.com>",
+      "desktop": {
+        "Name": "Shop Panel",
+        "Name[fa]": "پنل فروشگاه",
+        "GenericName": "Shop Product Manager",
+        "GenericName[fa]": "مدیریت محصولات فروشگاه",
+        "Comment": "Manage shop products and Telegram orders",
+        "Comment[fa]": "مدیریت محصولات و سفارش‌های تلگرام",
+        "Keywords": "shop;products;store;telegram;",
+        "Categories": "Office;Utility;",
+        "StartupWMClass": "ShopPanel"
+      }
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ShopPanel",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "alisoltanics",
+      "repo": "shop-panel",
+      "releaseType": "release"
+    }
+  }
+}

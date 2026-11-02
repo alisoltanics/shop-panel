@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' appimg: data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <title>پنل مدیریت فروشگاه</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="logo">🧵</span> پنل فروشگاه</div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="products">محصولات</button>
+        <button class="tab" data-tab="settings">تنظیمات و ربات</button>
+      </nav>
+      <div class="bot-pill off" id="botPill">ربات: غیرفعال</div>
+    </header>
+
+    <main>
+      <!-- محصولات -->
+      <section class="panel active" id="panel-products">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="جستجو در نام، دسته یا توضیحات…" />
+          <select id="filterCat">
+            <option value="">همه دسته‌ها</option>
+          </select>
+          <button class="btn primary" id="btnNew">+ محصول جدید</button>
+        </div>
+
+        <div class="grid" id="grid"></div>
+        <div class="empty hidden" id="empty">
+          <div class="empty-icon">📦</div>
+          <p>هنوز محصولی ثبت نشده است.</p>
+          <button class="btn primary" id="btnNewEmpty">افزودن اولین محصول</button>
+        </div>
+      </section>
+
+      <!-- تنظیمات -->
+      <section class="panel" id="panel-settings">
+        <div class="card">
+          <h2>اطلاعات فروشگاه</h2>
+          <p class="hint">این نام در ربات به مشتری نمایش داده می‌شود.</p>
+          <label>نام فروشگاه <input id="s-shopName" placeholder="مثلاً: گالری رومیزی آرام" /></label>
+          <label>توضیح کوتاه / شرایط ارسال <textarea id="s-note" rows="2" placeholder="ارسال به سراسر کشور…"></textarea></label>
+        </div>
+
+        <div class="card">
+          <h2>ربات تلگرام</h2>
+          <p class="hint">
+            توکن را از <b>@BotFather</b> بگیرید. صاحب فروشگاه باید یک بار به ربات <b>/start</b> بدهد و با دستور
+            <b> /id </b> چت آیدی خودش را بگیرد و اینجا وارد کند تا سفارش‌ها به آن چت ارسال شود.
+          </p>
+          <label>توکن ربات <input id="s-botToken" type="password" placeholder="123456:ABC-DEF…" /></label>
+          <label>چت آیدی فروشگاه <input id="s-shopChatId" placeholder="مثلاً 123456789" /></label>
+          <div class="row">
+            <button class="btn primary" id="btnSaveSettings">ذخیره تنظیمات</button>
+            <button class="btn" id="btnBotStart">▶️ روشن کردن ربات</button>
+            <button class="btn danger-ghost" id="btnBotStop">⏹ خاموش کردن</button>
+          </div>
+          <div class="status-line" id="botStatusText">وضعیت: غیرفعال</div>
+        </div>
+
+        <div class="card">
+          <h2>درباره اپ</h2>
+          <p class="hint">
+            نسخه <b id="appVersion">—</b> — محصولات، تنظیمات و عکس‌ها در پوشه اطلاعات کاربر ذخیره می‌شوند.
+          </p>
+          <div class="row">
+            <button class="btn" id="btnOpenData">📁 باز کردن پوشه اطلاعات</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- مودال محصول -->
+    <div class="modal hidden" id="modal">
+      <div class="modal-box">
+        <div class="modal-head">
+          <h2 id="modalTitle">محصول جدید</h2>
+          <button class="icon-btn" id="btnCloseModal">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="field-grid">
+            <label class="span2">نام محصول <input id="f-name" placeholder="رو میزی گلدار کتان" /></label>
+            <label>
+              دسته‌بندی
+              <input id="f-category" list="catList" placeholder="رومیزی" />
+              <datalist id="catList"></datalist>
+            </label>
+            <label>قیمت (تومان) <input id="f-price" type="number" min="0" step="1000" placeholder="850000" /></label>
+            <label>موجودی <input id="f-stock" type="number" min="0" step="1" placeholder="10" /></label>
+            <label>جنس <input id="f-material" placeholder="کتان / مخمل" /></label>
+            <label>ابعاد <input id="f-size" placeholder="۲ در ۱.۵ متر" /></label>
+            <label>رنگ‌ها (با کاما) <input id="f-colors" placeholder="کرم، سبز، خاکستری" /></label>
+            <label class="span2">توضیحات کامل <textarea id="f-description" rows="4" placeholder="جنس، نحوه شستشو، نکات…"></textarea></label>
+          </div>
+
+          <div class="images-section">
+            <div class="images-head">
+              <span>عکس‌های محصول</span>
+              <button class="btn small" id="btnAddImages">+ افزودن عکس</button>
+            </div>
+            <div class="thumbs" id="thumbs"></div>
+          </div>
+
+          <label class="switch">
+            <input type="checkbox" id="f-active" checked />
+            <span>نمایش این محصول در ربات</span>
+          </label>
+        </div>
+
+        <div class="modal-foot">
+          <button class="btn primary" id="btnSaveProduct">ذخیره محصول</button>
+          <button class="btn" id="btnCancel">انصراف</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

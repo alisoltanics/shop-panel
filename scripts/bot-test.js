@@ -174,6 +174,35 @@ function check(label, condition, extra = '') {
   const summary = fake.sent[fake.sent.length - 1];
   check('saved customer shown', summary.text.includes('اطلاعات شما') && summary.text.includes('علی رضایی'));
 
+  // بُعد با موجودی محدود
+  const sizeProduct = store.saveProduct({
+    name: 'رومیزی ساده',
+    price: 500000,
+    stock: 5,
+    sizes: [{ label: '۱۲۰×۱۸۰', price: null, stock: 1 }],
+  });
+  await cb(`pick:${sizeProduct.id}`);
+  const sizeChoices = fake.sent[fake.sent.length - 1];
+  const sizeButton = sizeChoices?.options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text || '';
+  check('size button shows stock', sizeButton.includes('(1 عدد)'), sizeButton);
+  await cb(`s:${sizeProduct.id}:0`);
+  await cb(`pick:${sizeProduct.id}`);
+  await cb(`s:${sizeProduct.id}:0`);
+  const blocked = fake.sent[fake.sent.length - 1];
+  check('size stock limit enforced', blocked.text.includes('موجودی این بُعد تمام شده'), blocked.text);
+
+  const directOrder = store.createOrder({
+    chatId: '7',
+    customer: store.getCustomer(42),
+    items: [{ productId: sizeProduct.id, name: 'رومیزی ساده', size: '۱۲۰×۱۸۰', qty: 1, unitPrice: 500000 }],
+  });
+  store.markOrderDone(directOrder.id);
+  check(
+    'size stock decremented on finalize',
+    store.getProduct(sizeProduct.id).sizes[0].stock === 0,
+    String(store.getProduct(sizeProduct.id).sizes[0].stock)
+  );
+
   // صف ارسال: خطای شبکه هنگام ارسال به فروشگاه
   fake.failFor = '999';
   await cb('confirmorder');

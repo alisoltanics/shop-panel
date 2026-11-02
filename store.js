@@ -55,6 +55,10 @@ class Store {
         .map((s) => ({
           label: String(s?.label ?? s ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
+          stock:
+            s?.stock === null || s?.stock === undefined || s?.stock === ''
+              ? null
+              : Math.max(0, Number(s.stock) || 0),
         }))
         .filter((s) => s.label);
       if (typeof p.video !== 'string') p.video = '';
@@ -114,6 +118,10 @@ class Store {
         .map((s) => ({
           label: String(s?.label ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
+          stock:
+            s?.stock === null || s?.stock === undefined || s?.stock === ''
+              ? null
+              : Math.max(0, Number(s.stock) || 0),
         }))
         .filter((s) => s.label),
       video: String(input.video || '').trim(),
@@ -260,6 +268,11 @@ class Store {
     for (const item of order.items) {
       const product = this.data.products.find((p) => p.id === Number(item.productId));
       if (!product) continue;
+
+      const size = item.size ? (product.sizes || []).find((s) => s.label === item.size) : null;
+      if (size && size.stock !== null && size.stock !== undefined) {
+        size.stock = Math.max(0, Number(size.stock) - Number(item.qty || 0));
+      }
 
       const variant = item.variantKey ? product.variants?.[item.variantKey] : null;
       if (variant && variant.stock !== null && variant.stock !== undefined) {

@@ -213,7 +213,7 @@ textarea { resize: vertical; }
 
 .sizes-section { margin-top: 16px; }
 .sizes-list { display: flex; flex-direction: column; gap: 8px; }
-.size-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; align-items: center; }
+.size-row { display: grid; grid-template-columns: 1fr 140px 100px auto; gap: 8px; align-items: center; }
 .hint.small { font-size: 12px; margin: 0; }
 
 .attr-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 8px; align-items: center; }

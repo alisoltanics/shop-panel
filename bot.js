@@ -28,8 +28,12 @@ function sizesOf(product) {
   return Array.isArray(product.sizes) ? product.sizes.filter((s) => s && s.label) : [];
 }
 
+function sizeOf(product, label) {
+  return sizesOf(product).find((s) => s.label === label) || null;
+}
+
 function priceOf(product, sizeLabel) {
-  const size = sizesOf(product).find((s) => s.label === sizeLabel);
+  const size = sizeOf(product, sizeLabel);
   if (size && Number(size.price) > 0) return Number(size.price);
   return Number(product.price) || 0;
 }
@@ -272,6 +276,17 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
     const key = `${product.id}|${size}|${(indices || []).join('-')}`;
     const entry = cart.get(key);
 
+    const sizeInfo = size ? sizeOf(product, size) : null;
+    if (
+      sizeInfo &&
+      sizeInfo.stock !== null &&
+      sizeInfo.stock !== undefined &&
+      sizeInfo.stock <= (entry?.qty || 0)
+    ) {
+      pickers.delete(chatId);
+      return bot.sendMessage(chatId, '⚠️ موجودی این بُعد تمام شده است.');
+    }
+
     if (variant.stock !== null && variant.stock <= (entry?.qty || 0)) {
       pickers.delete(chatId);
       return bot.sendMessage(chatId, '⚠️ موجودی این گزینه تمام شده است.');
@@ -336,12 +351,16 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
     }
 
     if (sizes.length) {
-      const rows = sizes.map((size, index) => [
-        {
-          text: `${size.label} — ${money(Number(size.price) > 0 ? size.price : product.price)}`,
-          callback_data: `s:${product.id}:${index}`,
-        },
-      ]);
+      const rows = sizes.map((size, index) => {
+        const stock = size.stock === null || size.stock === undefined ? null : Number(size.stock);
+        const suffix = stock === null ? '' : stock > 0 ? ` (${stock} عدد)` : ' (ناموجود)';
+        return [
+          {
+            text: `${size.label} — ${money(Number(size.price) > 0 ? size.price : product.price)}${suffix}`,
+            callback_data: `s:${product.id}:${index}`,
+          },
+        ];
+      });
       rows.push([{ text: '✕ انصراف', callback_data: 'pg:0' }]);
       return bot.sendMessage(chatId, `📏 <b>${esc(product.name)}</b>\nبُعد را انتخاب کنید:`, {
         parse_mode: 'HTML',

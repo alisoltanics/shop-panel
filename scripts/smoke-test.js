@@ -54,6 +54,7 @@ app.whenReady().then(async () => {
     const addSize = document.getElementById('btnAddSize');
     if (addSize) { addSize.click(); out.clickedButtons++; }
     out.sizeRows = document.querySelectorAll('.size-row').length;
+    out.sizeInputs = document.querySelectorAll('.size-row input').length;
 
     const addAttr = document.getElementById('btnAddAttr');
     if (addAttr) { addAttr.click(); out.clickedButtons++; }
@@ -103,6 +104,7 @@ app.whenReady().then(async () => {
     result.hasShippingField &&
     result.hasMessengerSelect &&
     result.sizeRows === 1 &&
+    result.sizeInputs === 3 &&
     result.attrRows === 1 &&
     result.variantRows === 2 &&
     result.variantInputs === 6 &&

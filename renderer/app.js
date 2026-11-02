@@ -243,7 +243,9 @@ function openModal(product = null) {
   editingId = product?.id ?? null;
   currentImages = product ? [...(product.images || [])] : [];
   currentVideo = product?.video || '';
-  currentSizes = product ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price })) : [];
+  currentSizes = product
+    ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price, stock: s.stock ?? null }))
+    : [];
   currentAttrs = (product?.attributes || []).map((a) => ({ name: a.name, optionsText: (a.options || []).join('، ') }));
   currentVariants = JSON.parse(JSON.stringify(product?.variants || {}));
 
@@ -366,6 +368,16 @@ function renderSizes() {
       currentSizes[index].price = Number(price.value) > 0 ? Number(price.value) : null;
     };
 
+    const stock = document.createElement('input');
+    stock.type = 'number';
+    stock.min = '0';
+    stock.step = '1';
+    stock.placeholder = 'موجودی';
+    stock.value = size.stock ?? '';
+    stock.oninput = () => {
+      currentSizes[index].stock = String(stock.value) === '' ? null : Math.max(0, Number(stock.value) || 0);
+    };
+
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'btn small danger-ghost';
@@ -375,13 +387,13 @@ function renderSizes() {
       renderSizes();
     };
 
-    row.append(label, price, remove);
+    row.append(label, price, stock, remove);
     wrap.appendChild(row);
   });
 }
 
 $('#btnAddSize').onclick = () => {
-  currentSizes.push({ label: '', price: null });
+  currentSizes.push({ label: '', price: null, stock: null });
   renderSizes();
 };
 

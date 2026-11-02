@@ -9,7 +9,17 @@ const path = require('node:path');
 class Store {
   constructor(filePath) {
     this.file = filePath;
-    this.data = { products: [], settings: {}, nextId: 1 };
+    this.data = {
+      products: [],
+      settings: {},
+      categories: [],
+      customers: {},
+      orders: [],
+      outbox: [],
+      nextId: 1,
+      nextOrderId: 0,
+      nextOutboxId: 0,
+    };
     this.load();
   }
 
@@ -19,11 +29,37 @@ class Store {
       this.data = {
         products: Array.isArray(raw.products) ? raw.products : [],
         settings: raw.settings && typeof raw.settings === 'object' ? raw.settings : {},
+        categories: Array.isArray(raw.categories) ? raw.categories : [],
+        customers: raw.customers && typeof raw.customers === 'object' ? raw.customers : {},
+        orders: Array.isArray(raw.orders) ? raw.orders : [],
+        outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
         nextId: Number(raw.nextId) || 1,
+        nextOrderId: Number(raw.nextOrderId) || 0,
+        nextOutboxId: Number(raw.nextOutboxId) || 0,
       };
     } catch {
       this.save();
     }
+    this.migrate();
+  }
+
+  /** داده‌های قدیمی را با ساختار جدید سازگار می‌کند. */
+  migrate() {
+    let changed = false;
+    for (const p of this.data.products) {
+      if (!Array.isArray(p.sizes)) {
+        p.sizes = p.size ? [{ label: String(p.size), price: null }] : [];
+        changed = true;
+      }
+      p.sizes = p.sizes
+        .map((s) => ({
+          label: String(s?.label ?? s ?? '').trim(),
+          price: Number(s?.price) > 0 ? Number(s.price) : null,
+        }))
+        .filter((s) => s.label);
+      if (typeof p.video !== 'string') p.video = '';
+    }
+    if (changed) this.save();
   }
 
   save() {
@@ -47,7 +83,13 @@ class Store {
       price: Number(input.price) || 0,
       stock: Number(input.stock) || 0,
       material: String(input.material || '').trim(),
-      size: String(input.size || '').trim(),
+      sizes: (Array.isArray(input.sizes) ? input.sizes : [])
+        .map((s) => ({
+          label: String(s?.label ?? '').trim(),
+          price: Number(s?.price) > 0 ? Number(s.price) : null,
+        }))
+        .filter((s) => s.label),
+      video: String(input.video || '').trim(),
       colors: Array.isArray(input.colors)
         ? input.colors.map((c) => String(c).trim()).filter(Boolean)
         : String(input.colors || '')
@@ -81,6 +123,113 @@ class Store {
     this.data.products = this.data.products.filter((p) => p.id !== Number(id));
     this.save();
     return before !== this.data.products.length;
+  }
+
+  /* ---------- دسته‌بندی‌ها ---------- */
+
+  listCategories() {
+    return [...this.data.categories];
+  }
+
+  addCategory(name) {
+    const value = String(name || '').trim();
+    if (!value) throw new Error('نام دسته‌بندی الزامی است');
+    if (!this.data.categories.includes(value)) {
+      this.data.categories.push(value);
+      this.save();
+    }
+    return this.listCategories();
+  }
+
+  removeCategory(name) {
+    this.data.categories = this.data.categories.filter((c) => c !== String(name));
+    this.save();
+    return this.listCategories();
+  }
+
+  /* ---------- مشتری‌ها ---------- */
+
+  getCustomer(chatId) {
+    return this.data.customers[String(chatId)] || null;
+  }
+
+  saveCustomer(chatId, customer = {}) {
+    const previous = this.getCustomer(chatId) || {};
+    this.data.customers[String(chatId)] = {
+      name: String(customer.name ?? previous.name ?? '').trim(),
+      phone: String(customer.phone ?? previous.phone ?? '').trim(),
+      postalCode: String(customer.postalCode ?? previous.postalCode ?? '').trim(),
+      address: String(customer.address ?? previous.address ?? '').trim(),
+      updatedAt: Date.now(),
+    };
+    this.save();
+    return this.getCustomer(chatId);
+  }
+
+  /* ---------- سفارش‌ها ---------- */
+
+  createOrder({ chatId, customer, items }) {
+    const total = items.reduce((sum, i) => sum + Number(i.unitPrice || 0) * Number(i.qty || 0), 0);
+    const order = {
+      id: ++this.data.nextOrderId,
+      code: String(Date.now()).slice(-6),
+      chatId: String(chatId),
+      customer,
+      items,
+      total,
+      status: 'pending',
+      createdAt: Date.now(),
+    };
+    this.data.orders.push(order);
+    this.save();
+    return order;
+  }
+
+  getOrder(id) {
+    return this.data.orders.find((o) => o.id === Number(id)) || null;
+  }
+
+  /** سفارش را نهایی می‌کند و موجودی محصولات را کاهش می‌دهد. */
+  markOrderDone(id) {
+    const order = this.getOrder(id);
+    if (!order || order.status === 'done') return null;
+
+    for (const item of order.items) {
+      const product = this.data.products.find((p) => p.id === Number(item.productId));
+      if (product) {
+        product.stock = Math.max(0, Number(product.stock || 0) - Number(item.qty || 0));
+        product.updatedAt = Date.now();
+      }
+    }
+
+    order.status = 'done';
+    order.doneAt = Date.now();
+    this.save();
+    return order;
+  }
+
+  /* ---------- صف ارسال ---------- */
+
+  enqueueOutbox(item) {
+    const entry = {
+      id: ++this.data.nextOutboxId,
+      createdAt: Date.now(),
+      chatId: String(item.chatId || ''),
+      text: String(item.text || ''),
+      markup: item.markup || null,
+    };
+    this.data.outbox.push(entry);
+    this.save();
+    return entry;
+  }
+
+  listOutbox() {
+    return [...this.data.outbox];
+  }
+
+  removeOutbox(id) {
+    this.data.outbox = this.data.outbox.filter((item) => item.id !== Number(id));
+    this.save();
   }
 
   getSettings() {

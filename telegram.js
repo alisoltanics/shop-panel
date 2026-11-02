@@ -15,6 +15,11 @@ const MIME = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.bmp': 'image/bmp',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
 };
 
 class TelegramClient {
@@ -60,7 +65,7 @@ class TelegramClient {
     return this.call('answerCallbackQuery', { callback_query_id: id, ...options });
   }
 
-  async sendPhoto(chatId, filePath, options = {}) {
+  async sendFile(method, field, chatId, filePath, options = {}) {
     const form = new FormData();
     form.append('chat_id', String(chatId));
     if (options.caption) form.append('caption', options.caption);
@@ -68,13 +73,21 @@ class TelegramClient {
     if (options.reply_markup) form.append('reply_markup', JSON.stringify(options.reply_markup));
 
     const buffer = fs.readFileSync(filePath);
-    const type = MIME[path.extname(filePath).toLowerCase()] || 'image/jpeg';
-    form.append('photo', new Blob([buffer], { type }), path.basename(filePath));
+    const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+    form.append(field, new Blob([buffer], { type }), path.basename(filePath));
 
-    const res = await fetch(`${this.base}/sendPhoto`, { method: 'POST', body: form });
+    const res = await fetch(`${this.base}/${method}`, { method: 'POST', body: form });
     const data = await res.json().catch(() => ({}));
-    if (!data.ok) throw new Error(data.description || `خطای ارسال عکس (${res.status})`);
+    if (!data.ok) throw new Error(data.description || `خطای ارسال فایل (${res.status})`);
     return data.result;
+  }
+
+  sendPhoto(chatId, filePath, options = {}) {
+    return this.sendFile('sendPhoto', 'photo', chatId, filePath, options);
+  }
+
+  sendVideo(chatId, filePath, options = {}) {
+    return this.sendFile('sendVideo', 'video', chatId, filePath, options);
   }
 
   start() {

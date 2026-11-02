@@ -1,15 +1,20 @@
 'use strict';
 
-// نکته: window.api توسط preload به شکل یک پراپرتی غیرقابل‌تنظیم روی window ساخته می‌شود؛
-// اعلان «const api = ...» در اسکوپ گلوبال خطای redeclare می‌دهد. پس فقط از window.api استفاده می‌کنیم.
+// نکته: window.api توسط preload روی window ساخته می‌شود و اعلان «const api = ...»
+// در اسکوپ گلوبال خطای redeclare می‌دهد؛ پس مستقیم از api گلوبال استفاده می‌کنیم.
+
 const $ = (sel) => document.querySelector(sel);
 
 let products = [];
+let categories = [];
 let currentImages = [];
+let currentVideo = '';
+let currentSizes = [];
 let editingId = null;
 
 const money = (n) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
 const imgUrl = (name) => `appimg://img/${encodeURIComponent(name)}`;
+const videoUrl = (name) => `appimg://video/${encodeURIComponent(name)}`;
 
 function toast(message, isError = false) {
   const el = $('#toast');
@@ -28,42 +33,80 @@ document.querySelectorAll('.tab').forEach((tab) => {
   });
 });
 
-/* ---------------- محصولات ---------------- */
+/* ---------------- داده‌ها ---------------- */
 async function loadProducts() {
   products = await api.listProducts();
   renderCategories();
   renderGrid();
 }
 
+async function loadCategories() {
+  categories = await api.listCategories();
+  renderCategories();
+}
+
+function allCategoryNames() {
+  return [...new Set([...categories, ...products.map((p) => p.category).filter(Boolean)])];
+}
+
 function renderCategories() {
-  const cats = [...new Set(products.map((p) => p.category).filter(Boolean))];
   const filter = $('#filterCat');
   const current = filter.value;
+  const names = allCategoryNames();
   filter.innerHTML = '<option value="">همه دسته‌ها</option>';
-  cats.forEach((c) => {
+  names.forEach((c) => {
     const opt = document.createElement('option');
     opt.value = c;
     opt.textContent = c;
     filter.appendChild(opt);
   });
-  filter.value = cats.includes(current) ? current : '';
+  filter.value = names.includes(current) ? current : '';
 
-  const dl = $('#catList');
-  dl.innerHTML = '';
-  cats.forEach((c) => {
-    const opt = document.createElement('option');
-    opt.value = c;
-    dl.appendChild(opt);
+  const chips = $('#categoryList');
+  chips.innerHTML = '';
+  if (!categories.length) {
+    const empty = document.createElement('span');
+    empty.className = 'hint small';
+    empty.textContent = 'هنوز دسته‌ای تعریف نشده است.';
+    chips.appendChild(empty);
+    return;
+  }
+  categories.forEach((name) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    const label = document.createElement('span');
+    label.textContent = name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '✕';
+    remove.title = 'حذف دسته';
+    remove.onclick = async () => {
+      if (!confirm(`دسته «${name}» حذف شود؟ محصولات آن بدون تغییر می‌مانند.`)) return;
+      categories = await api.removeCategory(name);
+      renderCategories();
+      renderGrid();
+      toast('دسته حذف شد');
+    };
+    chip.append(label, remove);
+    chips.appendChild(chip);
   });
+}
+
+/* ---------------- گرید محصولات ---------------- */
+function priceLabel(product) {
+  const prices = [Number(product.price) || 0, ...(product.sizes || []).map((s) => Number(s.price) || 0)].filter(
+    (v) => v > 0
+  );
+  if (!prices.length) return 'قیمت نامشخص';
+  const perSize = (product.sizes || []).some((s) => Number(s.price) > 0);
+  return perSize ? `از ${money(Math.min(...prices))}` : money(prices[0]);
 }
 
 function renderGrid() {
   const q = $('#search').value.trim().toLowerCase();
   const cat = $('#filterCat').value;
   const list = products.filter((p) => {
-    const matchQ =
-      !q ||
-      [p.name, p.category, p.description, p.material, p.size].join(' ').toLowerCase().includes(q);
+    const matchQ = !q || [p.name, p.category, p.description, p.material].join(' ').toLowerCase().includes(q);
     return matchQ && (!cat || p.category === cat);
   });
 
@@ -89,15 +132,27 @@ function renderGrid() {
 
     const catEl = document.createElement('div');
     catEl.className = 'p-cat';
-    catEl.textContent = [p.category, p.size, p.material].filter(Boolean).join(' • ') || 'بدون دسته';
+    catEl.textContent = [p.category, p.material].filter(Boolean).join(' • ') || 'بدون دسته';
 
     const price = document.createElement('div');
     price.className = 'p-price';
-    price.textContent = money(p.price);
+    price.textContent = priceLabel(p);
 
     const meta = document.createElement('div');
     meta.className = 'p-meta';
-    meta.innerHTML = `<span>موجودی: ${Number(p.stock) || 0}</span><span>${p.active === false ? '⛔ غیرفعال' : '✅ فعال'}</span><span>${p.images?.length || 0} عکس</span>`;
+    const sizeCount = (p.sizes || []).length;
+    const parts = [
+      `موجودی: ${Number(p.stock) || 0}`,
+      p.active === false ? '⛔ غیرفعال' : '✅ فعال',
+      `${p.images?.length || 0} عکس`,
+      sizeCount ? `${sizeCount} بُعد` : '',
+      p.video ? '🎬 ویدیو' : '',
+    ].filter(Boolean);
+    parts.forEach((text) => {
+      const span = document.createElement('span');
+      span.textContent = text;
+      meta.appendChild(span);
+    });
 
     body.append(name, catEl, price, meta);
 
@@ -137,21 +192,39 @@ function renderGrid() {
 $('#search').addEventListener('input', renderGrid);
 $('#filterCat').addEventListener('change', renderGrid);
 
-/* ---------------- مودال ---------------- */
+/* ---------------- مودال محصول ---------------- */
+function fillCategorySelect(selected = '') {
+  const select = $('#f-category');
+  const names = [...new Set([...categories, ...(selected ? [selected] : [])])];
+  select.innerHTML = '<option value="">بدون دسته</option>';
+  names.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    select.appendChild(opt);
+  });
+  select.value = selected || '';
+}
+
 function openModal(product = null) {
   editingId = product?.id ?? null;
   currentImages = product ? [...(product.images || [])] : [];
+  currentVideo = product?.video || '';
+  currentSizes = product ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price })) : [];
+
   $('#modalTitle').textContent = product ? 'ویرایش محصول' : 'محصول جدید';
   $('#f-name').value = product?.name || '';
-  $('#f-category').value = product?.category || '';
+  fillCategorySelect(product?.category || '');
   $('#f-price').value = product?.price ?? '';
   $('#f-stock').value = product?.stock ?? 0;
   $('#f-material').value = product?.material || '';
-  $('#f-size').value = product?.size || '';
   $('#f-colors').value = (product?.colors || []).join('، ');
   $('#f-description').value = product?.description || '';
   $('#f-active').checked = product ? product.active !== false : true;
+
   renderThumbs();
+  renderVideo();
+  renderSizes();
   $('#modal').classList.remove('hidden');
 }
 
@@ -159,6 +232,8 @@ function closeModal() {
   $('#modal').classList.add('hidden');
   editingId = null;
   currentImages = [];
+  currentVideo = '';
+  currentSizes = [];
 }
 
 function renderThumbs() {
@@ -187,6 +262,90 @@ function renderThumbs() {
   });
 }
 
+function renderVideo() {
+  const box = $('#videoBox');
+  box.innerHTML = '';
+  if (!currentVideo) {
+    const hint = document.createElement('span');
+    hint.className = 'hint small';
+    hint.textContent = 'بدون ویدیو';
+    box.appendChild(hint);
+    return;
+  }
+
+  const video = document.createElement('video');
+  video.src = videoUrl(currentVideo);
+  video.controls = true;
+
+  const info = document.createElement('div');
+  info.className = 'video-file';
+  const text = document.createElement('span');
+  text.textContent = 'ویدیو انتخاب شده';
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn small danger-ghost';
+  remove.textContent = 'حذف ویدیو';
+  remove.onclick = async () => {
+    await api.removeVideo(currentVideo);
+    currentVideo = '';
+    renderVideo();
+  };
+  info.append(text, remove);
+
+  box.append(video, info);
+}
+
+function renderSizes() {
+  const wrap = $('#sizes');
+  wrap.innerHTML = '';
+  if (!currentSizes.length) {
+    const hint = document.createElement('p');
+    hint.className = 'hint small';
+    hint.textContent = 'بدون بُعد — محصول فقط با قیمت پایه فروخته می‌شود.';
+    wrap.appendChild(hint);
+    return;
+  }
+
+  currentSizes.forEach((size, index) => {
+    const row = document.createElement('div');
+    row.className = 'size-row';
+
+    const label = document.createElement('input');
+    label.placeholder = 'مثلاً ۲ در ۱.۵ متر';
+    label.value = size.label || '';
+    label.oninput = () => {
+      currentSizes[index].label = label.value;
+    };
+
+    const price = document.createElement('input');
+    price.type = 'number';
+    price.min = '0';
+    price.step = '1000';
+    price.placeholder = 'قیمت (اختیاری)';
+    price.value = size.price ?? '';
+    price.oninput = () => {
+      currentSizes[index].price = Number(price.value) > 0 ? Number(price.value) : null;
+    };
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn small danger-ghost';
+    remove.textContent = '✕';
+    remove.onclick = () => {
+      currentSizes.splice(index, 1);
+      renderSizes();
+    };
+
+    row.append(label, price, remove);
+    wrap.appendChild(row);
+  });
+}
+
+$('#btnAddSize').onclick = () => {
+  currentSizes.push({ label: '', price: null });
+  renderSizes();
+};
+
 $('#btnAddImages').onclick = async () => {
   const picked = await api.pickImages();
   if (picked.length) {
@@ -195,17 +354,36 @@ $('#btnAddImages').onclick = async () => {
   }
 };
 
+$('#btnAddVideo').onclick = async () => {
+  const picked = await api.pickVideo();
+  if (picked) {
+    if (currentVideo) await api.removeVideo(currentVideo);
+    currentVideo = picked;
+    renderVideo();
+  }
+};
+
+$('#btnNewCat').onclick = async () => {
+  const name = prompt('نام دسته جدید:');
+  if (!name || !name.trim()) return;
+  categories = await api.addCategory(name);
+  fillCategorySelect(name.trim());
+  renderCategories();
+  toast('دسته اضافه شد');
+};
+
 $('#btnSaveProduct').onclick = async () => {
   const payload = {
     id: editingId || undefined,
     name: $('#f-name').value.trim(),
-    category: $('#f-category').value.trim(),
+    category: $('#f-category').value,
     price: Number($('#f-price').value) || 0,
     stock: Number($('#f-stock').value) || 0,
     material: $('#f-material').value.trim(),
-    size: $('#f-size').value.trim(),
     colors: $('#f-colors').value,
     description: $('#f-description').value.trim(),
+    sizes: currentSizes.filter((s) => String(s.label || '').trim()),
+    video: currentVideo,
     images: currentImages,
     active: $('#f-active').checked,
   };
@@ -228,6 +406,26 @@ $('#btnCloseModal').onclick = closeModal;
 $('#btnCancel').onclick = closeModal;
 $('#modal').addEventListener('click', (e) => {
   if (e.target.id === 'modal') closeModal();
+});
+
+/* ---------------- دسته‌بندی‌ها ---------------- */
+$('#btnAddCategory').onclick = async () => {
+  const input = $('#newCategory');
+  const name = input.value.trim();
+  if (!name) return toast('نام دسته را وارد کنید', true);
+  try {
+    categories = await api.addCategory(name);
+    input.value = '';
+    renderCategories();
+    renderGrid();
+    toast('دسته اضافه شد');
+  } catch (err) {
+    toast(err.message || 'خطا', true);
+  }
+};
+
+$('#newCategory').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#btnAddCategory').click();
 });
 
 /* ---------------- تنظیمات و ربات ---------------- */
@@ -273,11 +471,15 @@ $('#btnBotStop').onclick = async () => {
 };
 
 api.onBotStatus(applyBotStatus);
+api.onProductsChanged(() => {
+  loadProducts();
+});
 
 $('#btnOpenData').onclick = () => api.openDataDir();
 
 /* ---------------- شروع ---------------- */
 (async function init() {
+  await loadCategories();
   await loadProducts();
   await loadSettings();
   try {

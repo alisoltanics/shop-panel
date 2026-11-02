@@ -64,6 +64,16 @@
         </div>
 
         <div class="card">
+          <h2>دسته‌بندی‌ها</h2>
+          <p class="hint">دسته‌های محصولات را اینجا تعریف کنید؛ در فرم محصول به‌صورت لیست انتخاب می‌شوند.</p>
+          <div class="row">
+            <input id="newCategory" placeholder="نام دسته جدید (مثلاً کاور مبل)" />
+            <button class="btn primary" id="btnAddCategory">افزودن</button>
+          </div>
+          <div class="chips" id="categoryList"></div>
+        </div>
+
+        <div class="card">
           <h2>درباره اپ</h2>
           <p class="hint">
             نسخه <b id="appVersion">—</b> — محصولات، تنظیمات و عکس‌ها در پوشه اطلاعات کاربر ذخیره می‌شوند.
@@ -88,15 +98,24 @@
             <label class="span2">نام محصول <input id="f-name" placeholder="رو میزی گلدار کتان" /></label>
             <label>
               دسته‌بندی
-              <input id="f-category" list="catList" placeholder="رومیزی" />
-              <datalist id="catList"></datalist>
+              <div class="inline-row">
+                <select id="f-category"></select>
+                <button class="btn small" type="button" id="btnNewCat">+ دسته</button>
+              </div>
             </label>
-            <label>قیمت (تومان) <input id="f-price" type="number" min="0" step="1000" placeholder="850000" /></label>
+            <label>قیمت پایه (تومان) <input id="f-price" type="number" min="0" step="1000" placeholder="850000" /></label>
             <label>موجودی <input id="f-stock" type="number" min="0" step="1" placeholder="10" /></label>
             <label>جنس <input id="f-material" placeholder="کتان / مخمل" /></label>
-            <label>ابعاد <input id="f-size" placeholder="۲ در ۱.۵ متر" /></label>
             <label>رنگ‌ها (با کاما) <input id="f-colors" placeholder="کرم، سبز، خاکستری" /></label>
             <label class="span2">توضیحات کامل <textarea id="f-description" rows="4" placeholder="جنس، نحوه شستشو، نکات…"></textarea></label>
+          </div>
+
+          <div class="sizes-section">
+            <div class="images-head">
+              <span>ابعاد / اندازه‌ها — قیمت هر بُعد اختیاری است</span>
+              <button class="btn small" type="button" id="btnAddSize">+ افزودن بُعد</button>
+            </div>
+            <div id="sizes" class="sizes-list"></div>
           </div>
 
           <div class="images-section">
@@ -105,6 +124,14 @@
               <button class="btn small" id="btnAddImages">+ افزودن عکس</button>
             </div>
             <div class="thumbs" id="thumbs"></div>
+          </div>
+
+          <div class="images-section">
+            <div class="images-head">
+              <span>ویدیو محصول (اختیاری)</span>
+              <button class="btn small" id="btnAddVideo">+ افزودن ویدیو</button>
+            </div>
+            <div class="video-box" id="videoBox"></div>
           </div>
 
           <label class="switch">

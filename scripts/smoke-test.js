@@ -11,6 +11,7 @@ const path = require('node:path');
 const consoleErrors = [];
 
 ipcMain.handle('products:list', () => []);
+ipcMain.handle('categories:list', () => ['رومیزی', 'کاور مبل']);
 ipcMain.handle('settings:get', () => ({ shopName: '', botToken: '', shopChatId: '', note: '' }));
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), dataDir: '/tmp', platform: process.platform }));
 ipcMain.handle('bot:start', () => ({ running: false, message: 'test' }));
@@ -43,10 +44,27 @@ app.whenReady().then(async () => {
     const newBtn = document.getElementById('btnNew');
     if (newBtn) { newBtn.click(); out.clickedButtons++; }
     out.modalOpened = !document.getElementById('modal').classList.contains('hidden');
+    out.hasSizeEditor = !!document.getElementById('btnAddSize');
+    out.hasVideoPicker = !!document.getElementById('btnAddVideo');
+    out.categoryOptions = document.getElementById('f-category').options.length;
+    out.categoryChips = document.querySelectorAll('#categoryList .chip').length;
+    const addSize = document.getElementById('btnAddSize');
+    if (addSize) { addSize.click(); out.clickedButtons++; }
+    out.sizeRows = document.querySelectorAll('.size-row').length;
     return out;
   })()`);
 
-  const ok = result.hasApi && result.tabs === 2 && result.settingsVisible && result.modalOpened && consoleErrors.length === 0;
+  const ok =
+    result.hasApi &&
+    result.tabs === 2 &&
+    result.settingsVisible &&
+    result.modalOpened &&
+    result.hasSizeEditor &&
+    result.hasVideoPicker &&
+    result.categoryOptions >= 3 &&
+    result.categoryChips === 2 &&
+    result.sizeRows === 1 &&
+    consoleErrors.length === 0;
 
   console.log('SMOKE RESULT', JSON.stringify({ ...result, consoleErrors }));
   console.log(ok ? '✅ SMOKE TEST PASSED' : '❌ SMOKE TEST FAILED');

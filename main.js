@@ -14,6 +14,7 @@ let bot = null;
 let botStatus = { running: false, message: 'غیرفعال' };
 
 const imagesDir = () => path.join(app.getPath('userData'), 'images');
+const videosDir = () => path.join(app.getPath('userData'), 'videos');
 
 app.setName('ShopPanel');
 app.setAppUserModelId('ir.alisoltani.shoppanel');
@@ -33,6 +34,11 @@ const MIME = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.bmp': 'image/bmp',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
 };
 
 function setBotStatus(status) {
@@ -57,8 +63,14 @@ async function startBotFromSettings() {
       token: botToken,
       store,
       imagesDir: imagesDir(),
+      videosDir: videosDir(),
       getShopChatId: () => store.getSettings().shopChatId,
       onStatus: setBotStatus,
+      onStockChanged: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('products:changed');
+        }
+      },
     });
   } catch (err) {
     bot = null;
@@ -111,15 +123,17 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   fs.mkdirSync(imagesDir(), { recursive: true });
+  fs.mkdirSync(videosDir(), { recursive: true });
   store = new Store(path.join(app.getPath('userData'), 'data.json'));
 
   // سرو کردن عکس‌های محصولات با پروتکل امن داخلی
   protocol.handle('appimg', async (request) => {
     try {
       const url = new URL(request.url);
+      const baseDir = url.hostname === 'video' ? videosDir() : imagesDir();
       const name = path.basename(decodeURIComponent(url.pathname));
-      const file = path.join(imagesDir(), name);
-      if (!file.startsWith(imagesDir()) || !fs.existsSync(file)) {
+      const file = path.join(baseDir, name);
+      if (!file.startsWith(baseDir) || !fs.existsSync(file)) {
         return new Response('not found', { status: 404 });
       }
       const ext = path.extname(file).toLowerCase();
@@ -192,6 +206,36 @@ function registerIpc() {
       return false;
     }
   });
+
+  ipcMain.handle('videos:pick', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'انتخاب ویدیو محصول',
+      properties: ['openFile'],
+      filters: [{ name: 'ویدیو', extensions: ['mp4', 'm4v', 'webm', 'mov', 'mkv'] }],
+    });
+    if (result.canceled || !result.filePaths.length) return '';
+
+    const src = result.filePaths[0];
+    const ext = (path.extname(src) || '.mp4').toLowerCase();
+    const name = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+    fs.mkdirSync(videosDir(), { recursive: true });
+    fs.copyFileSync(src, path.join(videosDir(), name));
+    return name;
+  });
+
+  ipcMain.handle('videos:remove', (_e, name) => {
+    try {
+      const file = path.join(videosDir(), path.basename(String(name)));
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('categories:list', () => store.listCategories());
+  ipcMain.handle('categories:add', (_e, name) => store.addCategory(name));
+  ipcMain.handle('categories:remove', (_e, name) => store.removeCategory(name));
 
   ipcMain.handle('settings:get', () => store.getSettings());
 

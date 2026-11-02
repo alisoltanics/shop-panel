@@ -208,6 +208,31 @@ textarea { resize: vertical; }
   line-height: 1;
 }
 
+.inline-row { display: flex; gap: 6px; align-items: center; }
+.inline-row select { flex: 1; }
+
+.sizes-section { margin-top: 16px; }
+.sizes-list { display: flex; flex-direction: column; gap: 8px; }
+.size-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; align-items: center; }
+.hint.small { font-size: 12px; margin: 0; }
+
+.video-box { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
+.video-box video { width: 220px; border-radius: 10px; border: 1px solid var(--line); background: #000; }
+.video-file { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #0c0f14;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+.chip button { background: transparent; border: 0; color: #fca5a5; cursor: pointer; font-size: 14px; line-height: 1; }
+
 .switch { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 13px; }
 .switch input { width: 16px; height: 16px; accent-color: var(--accent); }
 

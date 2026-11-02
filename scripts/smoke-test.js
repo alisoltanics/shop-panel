@@ -14,7 +14,19 @@ ipcMain.handle('products:list', () => []);
 ipcMain.handle('categories:list', () => ['رومیزی', 'کاور مبل']);
 ipcMain.handle('categories:add', (_e, name) => ['رومیزی', 'کاور مبل', name]);
 ipcMain.handle('categories:remove', () => ['رومیزی']);
-ipcMain.handle('orders:list', () => []);
+ipcMain.handle('orders:list', () => [
+  {
+    id: 1,
+    code: '123456',
+    status: 'done',
+    total: 1000000,
+    shipping: 0,
+    createdAt: Date.now(),
+    chatId: '42',
+    customer: { name: 'علی', phone: '09120000000', postalCode: '1234567890', address: 'تهران' },
+    items: [{ name: 'رومیزی', size: '۱۲۰×۱۸۰', qty: 1, unitPrice: 1000000 }],
+  },
+]);
 ipcMain.handle('options:list', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
 ipcMain.handle('options:add', (_e, kind, value) => (kind === 'capacity' ? ['۴ نفره', value] : ['دایره', value]));
 ipcMain.handle('options:remove', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
@@ -94,6 +106,15 @@ app.whenReady().then(async () => {
     document.querySelector('[data-tab="orders"]').click();
     out.ordersVisible = document.getElementById('panel-orders').classList.contains('active');
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
+    out.orderCards = document.querySelectorAll('.order-card').length;
+
+    document.querySelector('[data-tab="customers"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    out.customersVisible = document.getElementById('panel-customers').classList.contains('active');
+    out.customerCards = document.querySelectorAll('.customer-card').length;
+    const toggle = document.querySelector('.customer-card .btn');
+    if (toggle) { toggle.click(); out.clickedButtons++; }
+    out.customerDetailsOpen = !document.querySelector('.cust-details')?.classList.contains('hidden');
     out.hasShippingField = !!document.getElementById('s-shipping');
     out.hasTelegramFields = !!document.getElementById('tg-token') && !!document.getElementById('tg-chat');
     out.hasBaleFields = !!document.getElementById('bale-token') && !!document.getElementById('bale-chat');
@@ -103,7 +124,7 @@ app.whenReady().then(async () => {
 
   const ok =
     result.hasApi &&
-    result.tabs === 3 &&
+    result.tabs === 4 &&
     result.modalOpened &&
     result.sizeRows === 1 &&
     result.sizeInputs === 3 &&
@@ -116,7 +137,11 @@ app.whenReady().then(async () => {
     result.capacityChipsBefore === 1 &&
     result.capacityChipsAfter === 2 &&
     result.ordersVisible &&
-    result.ordersEmptyShown &&
+    result.ordersEmptyShown === false &&
+    result.orderCards === 1 &&
+    result.customersVisible &&
+    result.customerCards === 1 &&
+    result.customerDetailsOpen &&
     result.hasShippingField &&
     result.hasTelegramFields &&
     result.hasBaleFields &&

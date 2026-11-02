@@ -8,15 +8,15 @@
 ریپو خصوصی است، پس فایل‌ها را با GitHub CLI بگیرید:
 
 ```bash
-gh release download v1.8.0 -R alisoltanics/shop-panel -D ~/Downloads
-sudo dpkg -i ~/Downloads/ShopPanel-1.8.0-linux-amd64.deb   # نصب در منوی اوبونتو
+gh release download v1.9.0 -R alisoltanics/shop-panel -D ~/Downloads
+sudo dpkg -i ~/Downloads/ShopPanel-1.9.0-linux-amd64.deb   # نصب در منوی اوبونتو
 ```
 
 از بخش [Releases](https://github.com/alisoltanics/shop-panel/releases):
 
-- **Ubuntu / Debian**: `ShopPanel-1.8.0-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
-  یا `ShopPanel-1.8.0-x86_64.AppImage` (بدون نصب: `chmod +x` و اجرا).
-- **Windows**: `ShopPanel-Setup-1.8.0.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
+- **Ubuntu / Debian**: `ShopPanel-1.9.0-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
+  یا `ShopPanel-1.9.0-x86_64.AppImage` (بدون نصب: `chmod +x` و اجرا).
+- **Windows**: `ShopPanel-Setup-1.9.0.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
 
 ## اجرا از سورس
 
@@ -54,6 +54,7 @@ npm run uninstall:desktop    # حذف از منو
 - **مدیریت دسته‌بندی‌ها** در تنظیمات؛ انتخاب دسته از لیست هنگام ثبت محصول
 - **هزینه ارسال/پست** در تنظیمات؛ به سبد خرید و فاکتور سفارش اضافه می‌شود
 - **لیست سفارش‌ها** در تب «سفارش‌ها»: وضعیت، تاریخ، مشتری، اقلام، هزینه ارسال و جمع کل
+- **تب مشتریان**: همه خریدارانی که سفارششان نهایی شده، با تعداد خرید، مجموع خرید و **تاریخچه کامل اقلام هر سفارش** (همیشه ذخیره می‌ماند)
 - **داشبورد آماری** بالای صفحه محصولات: تعداد محصولات، موجودی کل، سفارش‌های در انتظار و فروش نهایی‌شده
 - رابط کاربری تازه با نوار کناری، کارت‌های محصول و صفحه‌بندی عنوان برای هر بخش
 - فعال/غیرفعال کردن محصول در ربات + جستجو و فیلتر دسته

@@ -32,6 +32,7 @@ function toast(message, isError = false) {
 const PAGE_META = {
   products: ['محصولات', 'کاتالوگ فروشگاه را مدیریت کنید'],
   orders: ['سفارش‌ها', 'پیگیری سفارش‌های ثبت‌شده از ربات'],
+  customers: ['مشتریان', 'خریداران نهایی‌شده و تاریخچه خریدشان'],
   settings: ['تنظیمات و ربات‌ها', 'اتصال تلگرام و بله، دسته‌بندی و گزینه‌ها'],
 };
 
@@ -46,7 +47,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
       $('#pageSub').textContent = meta[1];
     }
 
-    if (tab.dataset.tab === 'orders') loadOrders();
+    if (tab.dataset.tab === 'orders' || tab.dataset.tab === 'customers') loadOrders();
   });
 });
 
@@ -829,6 +830,7 @@ async function loadOrders() {
   try {
     orders = await api.listOrders();
     renderOrders(orders);
+    renderCustomers();
     renderStats();
   } catch (err) {
     toast(err.message || 'خطا در دریافت سفارش‌ها', true);
@@ -836,6 +838,97 @@ async function loadOrders() {
 }
 
 $('#btnRefreshOrders').onclick = loadOrders;
+
+/* ---------------- مشتریان (از سفارش‌های نهایی‌شده) ---------------- */
+function renderCustomers() {
+  const wrap = $('#customersList');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const map = new Map();
+  for (const order of orders) {
+    if (order.status !== 'done') continue;
+
+    const key = order.chatId || order.customer?.phone || String(order.code);
+    const entry = map.get(key) || { customer: order.customer || {}, orders: [], total: 0, lastAt: 0 };
+    entry.orders.push(order);
+    entry.total += Number(order.total || 0);
+    entry.lastAt = Math.max(entry.lastAt, Number(order.createdAt) || 0);
+    map.set(key, entry);
+  }
+
+  const customers = [...map.values()].sort((a, b) => b.lastAt - a.lastAt);
+  $('#customersEmpty')?.classList.toggle('hidden', customers.length > 0);
+
+  customers.forEach((entry) => {
+    const card = document.createElement('article');
+    card.className = 'customer-card';
+
+    const head = document.createElement('div');
+    head.className = 'cust-head';
+
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    avatar.textContent = String(entry.customer.name || '?').trim().charAt(0);
+
+    const info = document.createElement('div');
+    info.className = 'cust-info';
+    const name = document.createElement('div');
+    name.className = 'cust-name';
+    name.textContent = entry.customer.name || 'مشتری';
+    const meta = document.createElement('div');
+    meta.className = 'cust-meta';
+    meta.textContent = `${entry.customer.phone || '—'} • ${entry.orders.length} خرید • مجموع ${money(entry.total)}`;
+    info.append(name, meta);
+
+    const toggle = document.createElement('button');
+    toggle.className = 'btn small';
+    toggle.textContent = 'تاریخچه خرید';
+
+    head.append(avatar, info, toggle);
+
+    const details = document.createElement('div');
+    details.className = 'cust-details hidden';
+
+    const addr = document.createElement('div');
+    addr.className = 'order-addr';
+    addr.textContent = `📍 ${entry.customer.address || '—'} — کد پستی: ${entry.customer.postalCode || '—'}`;
+    details.appendChild(addr);
+
+    [...entry.orders]
+      .sort((a, b) => Number(b.createdAt) - Number(a.createdAt))
+      .forEach((order) => {
+        const block = document.createElement('div');
+        block.className = 'cust-order';
+
+        const title = document.createElement('div');
+        title.className = 'cust-order-head';
+        title.textContent = `#${order.code} — ${formatDate(order.createdAt)} — ${money(order.total)}`;
+
+        const list = document.createElement('ul');
+        list.className = 'order-items';
+        order.items.forEach((item) => {
+          const li = document.createElement('li');
+          const extra = [item.size, item.capacity, item.shape].filter(Boolean).join(' / ');
+          li.textContent = `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
+          list.appendChild(li);
+        });
+
+        block.append(title, list);
+        details.appendChild(block);
+      });
+
+    toggle.onclick = () => {
+      details.classList.toggle('hidden');
+      toggle.textContent = details.classList.contains('hidden') ? 'تاریخچه خرید' : 'بستن';
+    };
+
+    card.append(head, details);
+    wrap.appendChild(card);
+  });
+}
+
+$('#btnRefreshCustomers').onclick = loadOrders;
 
 api.onBotStatus(applyBotStatus);
 api.onProductsChanged(() => {

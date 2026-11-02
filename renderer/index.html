@@ -23,6 +23,7 @@
         <nav class="nav">
           <button class="tab active" data-tab="products"><span class="nav-icon">📦</span> محصولات</button>
           <button class="tab" data-tab="orders"><span class="nav-icon">🧾</span> سفارش‌ها</button>
+          <button class="tab" data-tab="customers"><span class="nav-icon">🧑‍💼</span> مشتریان</button>
           <button class="tab" data-tab="settings"><span class="nav-icon">⚙️</span> تنظیمات و ربات‌ها</button>
         </nav>
 
@@ -91,6 +92,18 @@
         <div class="empty hidden" id="ordersEmpty">
           <div class="empty-icon">🧾</div>
           <p>هنوز سفارشی ثبت نشده است.</p>
+        </div>
+      </section>
+
+      <!-- مشتریان -->
+      <section class="panel" id="panel-customers">
+        <div class="toolbar">
+          <button class="btn" id="btnRefreshCustomers">↻ به‌روزرسانی مشتریان</button>
+        </div>
+        <div id="customersList" class="orders"></div>
+        <div class="empty hidden" id="customersEmpty">
+          <div class="empty-icon">🧑‍💼</div>
+          <p>هنوز سفارش نهایی‌شده‌ای ثبت نشده است.</p>
         </div>
       </section>
 

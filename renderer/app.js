@@ -1,6 +1,7 @@
 'use strict';
 
-const api = window.api;
+// نکته: window.api توسط preload به شکل یک پراپرتی غیرقابل‌تنظیم روی window ساخته می‌شود؛
+// اعلان «const api = ...» در اسکوپ گلوبال خطای redeclare می‌دهد. پس فقط از window.api استفاده می‌کنیم.
 const $ = (sel) => document.querySelector(sel);
 
 let products = [];

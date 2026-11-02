@@ -179,12 +179,13 @@ function check(label, condition, extra = '') {
     name: 'رومیزی ساده',
     price: 500000,
     stock: 5,
-    sizes: [{ label: '۱۲۰×۱۸۰', price: null, stock: 1 }],
+    sizes: [{ label: '۱۲۰×۱۸۰', capacity: '۴ نفره', shape: 'دایره', price: null, stock: 1 }],
   });
   await cb(`pick:${sizeProduct.id}`);
   const sizeChoices = fake.sent[fake.sent.length - 1];
   const sizeButton = sizeChoices?.options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text || '';
   check('size button shows stock', sizeButton.includes('(1 عدد)'), sizeButton);
+  check('size button shows capacity and shape', sizeButton.includes('۴ نفره') && sizeButton.includes('دایره'), sizeButton);
   await cb(`s:${sizeProduct.id}:0`);
   await cb(`pick:${sizeProduct.id}`);
   await cb(`s:${sizeProduct.id}:0`);
@@ -194,7 +195,17 @@ function check(label, condition, extra = '') {
   const directOrder = store.createOrder({
     chatId: '7',
     customer: store.getCustomer(42),
-    items: [{ productId: sizeProduct.id, name: 'رومیزی ساده', size: '۱۲۰×۱۸۰', qty: 1, unitPrice: 500000 }],
+    items: [
+      {
+        productId: sizeProduct.id,
+        name: 'رومیزی ساده',
+        size: '۱۲۰×۱۸۰',
+        capacity: '۴ نفره',
+        shape: 'دایره',
+        qty: 1,
+        unitPrice: 500000,
+      },
+    ],
   });
   store.markOrderDone(directOrder.id);
   check(

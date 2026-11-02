@@ -240,6 +240,11 @@ function registerIpc() {
 
   ipcMain.handle('orders:list', () => store.listOrders());
 
+  ipcMain.handle('options:list', (_e, kind) => store.listOptions(kind));
+  ipcMain.handle('options:add', (_e, kind, value) => store.addOption(kind, value));
+  ipcMain.handle('options:remove', (_e, kind, value) => store.removeOption(kind, value));
+  ipcMain.handle('options:rename', (_e, kind, from, to) => store.renameOption(kind, from, to));
+
   ipcMain.handle('settings:get', () => store.getSettings());
 
   ipcMain.handle('settings:save', async (_e, settings) => {

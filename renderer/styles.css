@@ -174,7 +174,7 @@ textarea { resize: vertical; }
   border: 1px solid var(--line);
   border-radius: 16px;
   width: 100%;
-  max-width: 720px;
+  max-width: 800px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -213,7 +213,12 @@ textarea { resize: vertical; }
 
 .sizes-section { margin-top: 16px; }
 .sizes-list { display: flex; flex-direction: column; gap: 8px; }
-.size-row { display: grid; grid-template-columns: 1fr 140px 100px auto; gap: 8px; align-items: center; }
+.size-row { display: grid; grid-template-columns: 1fr 105px 105px 120px 85px auto; gap: 6px; align-items: center; }
+.size-row input, .size-row select { padding: 8px 10px; font-size: 13px; }
+.size-head { font-size: 11.5px; color: var(--muted); opacity: 0.75; }
+
+.option-group { margin-bottom: 14px; }
+.option-head { font-size: 13px; margin-bottom: 8px; color: var(--text); }
 .hint.small { font-size: 12px; margin: 0; }
 
 .attr-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 8px; align-items: center; }

@@ -1,17 +1,17 @@
 'use strict';
 
-// نکته: window.api توسط preload روی window ساخته می‌شود و اعلان «const api = ...»
-// در اسکوپ گلوبال خطای redeclare می‌دهد؛ پس مستقیم از api گلوبال استفاده می‌کنیم.
+// نکته: window.api توسط preload روی window ساخته می‌شود؛ اعلان «const api = ...»
+// در اسکوپ گلوبال خطای redeclare می‌دهد، پس مستقیم از api گلوبال استفاده می‌کنیم.
 
 const $ = (sel) => document.querySelector(sel);
 
 let products = [];
 let categories = [];
+let capacityOptions = [];
+let shapeOptions = [];
 let currentImages = [];
 let currentVideo = '';
 let currentSizes = [];
-let currentAttrs = [];
-let currentVariants = {};
 let editingId = null;
 
 const money = (n) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
@@ -77,6 +77,11 @@ async function loadCategories() {
   renderCategories();
 }
 
+async function loadOptions() {
+  [capacityOptions, shapeOptions] = await Promise.all([api.listOptions('capacity'), api.listOptions('shape')]);
+  renderOptions();
+}
+
 function allCategoryNames() {
   return [...new Set([...categories, ...products.map((p) => p.category).filter(Boolean)])];
 }
@@ -134,6 +139,10 @@ function priceLabel(product) {
   return perSize ? `از ${money(Math.min(...prices))}` : money(prices[0]);
 }
 
+function sizeSummary(size) {
+  return [size.label, size.capacity, size.shape].filter(Boolean).join(' • ');
+}
+
 function renderGrid() {
   const q = $('#search').value.trim().toLowerCase();
   const cat = $('#filterCat').value;
@@ -178,7 +187,6 @@ function renderGrid() {
       p.active === false ? '⛔ غیرفعال' : '✅ فعال',
       `${p.images?.length || 0} عکس`,
       sizeCount ? `${sizeCount} بُعد` : '',
-      (p.attributes || []).length ? `${(p.attributes || []).length} ویژگی` : '',
       p.video ? '🎬 ویدیو' : '',
     ].filter(Boolean);
     parts.forEach((text) => {
@@ -244,10 +252,14 @@ function openModal(product = null) {
   currentImages = product ? [...(product.images || [])] : [];
   currentVideo = product?.video || '';
   currentSizes = product
-    ? (product.sizes || []).map((s) => ({ label: s.label, price: s.price, stock: s.stock ?? null }))
+    ? (product.sizes || []).map((s) => ({
+        label: s.label,
+        capacity: s.capacity || '',
+        shape: s.shape || '',
+        price: s.price ?? null,
+        stock: s.stock ?? null,
+      }))
     : [];
-  currentAttrs = (product?.attributes || []).map((a) => ({ name: a.name, optionsText: (a.options || []).join('، ') }));
-  currentVariants = JSON.parse(JSON.stringify(product?.variants || {}));
 
   $('#modalTitle').textContent = product ? 'ویرایش محصول' : 'محصول جدید';
   $('#f-name').value = product?.name || '';
@@ -262,8 +274,6 @@ function openModal(product = null) {
   renderThumbs();
   renderVideo();
   renderSizes();
-  renderAttrs();
-  renderVariants();
   $('#modal').classList.remove('hidden');
 }
 
@@ -273,8 +283,6 @@ function closeModal() {
   currentImages = [];
   currentVideo = '';
   currentSizes = [];
-  currentAttrs = [];
-  currentVariants = {};
 }
 
 function renderThumbs() {
@@ -336,9 +344,70 @@ function renderVideo() {
   box.append(video, info);
 }
 
+/* ---------------- ابعاد با تعداد نفرات و شکل ---------------- */
+function fillOptionSelect(select, list, selected) {
+  select.innerHTML = '';
+
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '—';
+  select.appendChild(empty);
+
+  // مقدار ذخیره‌شده ممکن است دیگر در لیست گزینه‌ها نباشد؛ باید همچنان نمایش داده شود
+  const values = selected && !list.includes(selected) ? [...list, selected] : [...list];
+
+  values.forEach((value) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    select.appendChild(opt);
+  });
+
+  const addNew = document.createElement('option');
+  addNew.value = '__new__';
+  addNew.textContent = '＋ گزینه جدید…';
+  select.appendChild(addNew);
+
+  select.value = selected || '';
+}
+
+async function handleOptionSelect(select, kind, index) {
+  if (select.value !== '__new__') {
+    currentSizes[index][kind] = select.value;
+    return;
+  }
+
+  const title = kind === 'capacity' ? 'گزینه جدید تعداد نفرات' : 'گزینه جدید شکل';
+  const placeholder = kind === 'capacity' ? 'مثلاً ۴ نفره' : 'مثلاً دایره';
+  const value = await askText(title, placeholder);
+
+  if (!value) {
+    select.value = currentSizes[index][kind] || '';
+    return;
+  }
+
+  const list = await api.addOption(kind, value);
+  if (kind === 'capacity') capacityOptions = list;
+  else shapeOptions = list;
+
+  currentSizes[index][kind] = value;
+  renderOptions();
+  renderSizes();
+}
+
 function renderSizes() {
   const wrap = $('#sizes');
   wrap.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.className = 'size-row size-head';
+  ['ابعاد / اندازه', 'تعداد نفرات', 'شکل', 'قیمت (تومان)', 'موجودی', ''].forEach((text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    head.appendChild(span);
+  });
+  wrap.appendChild(head);
+
   if (!currentSizes.length) {
     const hint = document.createElement('p');
     hint.className = 'hint small';
@@ -352,17 +421,25 @@ function renderSizes() {
     row.className = 'size-row';
 
     const label = document.createElement('input');
-    label.placeholder = 'مثلاً ۲ در ۱.۵ متر';
+    label.placeholder = 'مثلاً ۱۲۰×۱۸۰ سانتی‌متر';
     label.value = size.label || '';
     label.oninput = () => {
       currentSizes[index].label = label.value;
     };
 
+    const capacity = document.createElement('select');
+    fillOptionSelect(capacity, capacityOptions, size.capacity);
+    capacity.onchange = () => handleOptionSelect(capacity, 'capacity', index);
+
+    const shape = document.createElement('select');
+    fillOptionSelect(shape, shapeOptions, size.shape);
+    shape.onchange = () => handleOptionSelect(shape, 'shape', index);
+
     const price = document.createElement('input');
     price.type = 'number';
     price.min = '0';
     price.step = '1000';
-    price.placeholder = 'قیمت (اختیاری)';
+    price.placeholder = 'قیمت';
     price.value = size.price ?? '';
     price.oninput = () => {
       currentSizes[index].price = Number(price.value) > 0 ? Number(price.value) : null;
@@ -387,175 +464,98 @@ function renderSizes() {
       renderSizes();
     };
 
-    row.append(label, price, stock, remove);
+    row.append(label, capacity, shape, price, stock, remove);
     wrap.appendChild(row);
   });
 }
 
 $('#btnAddSize').onclick = () => {
-  currentSizes.push({ label: '', price: null, stock: null });
+  currentSizes.push({ label: '', capacity: '', shape: '', price: null, stock: null });
   renderSizes();
 };
 
-/* ---------------- ویژگی‌ها و قیمت ترکیب گزینه‌ها ---------------- */
-function parsedAttrs() {
-  return currentAttrs
-    .map((a) => ({
-      name: String(a.name || '').trim(),
-      options: String(a.optionsText || '')
-        .split(/[,،]/)
-        .map((o) => o.trim())
-        .filter(Boolean),
-    }))
-    .filter((a) => a.name && a.options.length);
-}
-
-function combosOf(attrs) {
-  let combos = [{ key: '', labels: [] }];
-  for (const attr of attrs) {
-    const next = [];
-    for (const combo of combos) {
-      attr.options.forEach((option, index) => {
-        next.push({ key: combo.key ? `${combo.key}-${index}` : String(index), labels: [...combo.labels, option] });
-      });
-    }
-    combos = next;
-    if (combos.length > 60) return [];
-  }
-  return combos;
-}
-
-function renderAttrs() {
-  const wrap = $('#attrs');
+/* ---------------- گزینه‌های تعداد نفرات و شکل (تنظیمات) ---------------- */
+function renderOptionChips(kind, list) {
+  const wrap = kind === 'capacity' ? $('#capacityList') : $('#shapeList');
   wrap.innerHTML = '';
-  if (!currentAttrs.length) {
-    const hint = document.createElement('p');
+
+  if (!list.length) {
+    const hint = document.createElement('span');
     hint.className = 'hint small';
-    hint.textContent = 'بدون ویژگی — می‌توانید مثل «شکل» یا «ظرفیت» اضافه کنید.';
+    hint.textContent = 'هنوز گزینه‌ای اضافه نشده است.';
     wrap.appendChild(hint);
     return;
   }
 
-  currentAttrs.forEach((attr, index) => {
-    const row = document.createElement('div');
-    row.className = 'attr-row';
+  list.forEach((value) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
 
-    const name = document.createElement('input');
-    name.className = 'attr-name';
-    name.placeholder = 'نام ویژگی';
-    name.value = attr.name || '';
-    name.oninput = () => {
-      currentAttrs[index].name = name.value;
-      renderVariants();
-    };
+    const label = document.createElement('span');
+    label.textContent = value;
 
-    const options = document.createElement('input');
-    options.className = 'attr-options';
-    options.placeholder = 'گزینه‌ها با کاما: دایره‌ای، مستطیلی';
-    options.value = attr.optionsText || '';
-    options.oninput = () => {
-      currentAttrs[index].optionsText = options.value;
-      renderVariants();
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.textContent = '✎';
+    edit.title = 'ویرایش گزینه';
+    edit.onclick = async () => {
+      const next = await askText('ویرایش گزینه', '', value);
+      if (!next || next === value) return;
+      const updated = await api.renameOption(kind, value, next);
+      if (kind === 'capacity') capacityOptions = updated;
+      else shapeOptions = updated;
+      renderOptions();
+      if (!$('#modal').classList.contains('hidden')) renderSizes();
+      toast('گزینه ویرایش شد');
     };
 
     const remove = document.createElement('button');
     remove.type = 'button';
-    remove.className = 'btn small danger-ghost';
     remove.textContent = '✕';
-    remove.onclick = () => {
-      currentAttrs.splice(index, 1);
-      renderAttrs();
-      renderVariants();
+    remove.title = 'حذف گزینه';
+    remove.onclick = async () => {
+      if (!confirm(`گزینه «${value}» حذف شود؟`)) return;
+      const updated = await api.removeOption(kind, value);
+      if (kind === 'capacity') capacityOptions = updated;
+      else shapeOptions = updated;
+      renderOptions();
+      toast('گزینه حذف شد');
     };
 
-    row.append(name, options, remove);
-    wrap.appendChild(row);
+    chip.append(label, edit, remove);
+    wrap.appendChild(chip);
   });
 }
 
-function updateVariant(key, field, rawValue) {
-  const entry = { price: null, stock: null, dims: '', ...(currentVariants[key] || {}) };
-
-  if (field === 'dims') {
-    entry.dims = String(rawValue || '').trim();
-  } else if (field === 'stock') {
-    entry.stock = String(rawValue) === '' ? null : Math.max(0, Number(rawValue) || 0);
-  } else {
-    entry.price = Number(rawValue) > 0 ? Number(rawValue) : null;
-  }
-
-  if (entry.price === null && entry.stock === null && !entry.dims) delete currentVariants[key];
-  else currentVariants[key] = entry;
+function renderOptions() {
+  renderOptionChips('capacity', capacityOptions);
+  renderOptionChips('shape', shapeOptions);
 }
 
-function renderVariants() {
-  const section = $('#variantSection');
-  const wrap = $('#variants');
-  wrap.innerHTML = '';
+async function addOptionFromSettings(kind) {
+  const input = kind === 'capacity' ? $('#newCapacity') : $('#newShape');
+  const value = input.value.trim();
+  if (!value) return toast('مقدار را وارد کنید', true);
 
-  const attrs = parsedAttrs();
-  if (!attrs.length) {
-    section.classList.add('hidden');
-    return;
-  }
-  section.classList.remove('hidden');
+  const list = await api.addOption(kind, value);
+  if (kind === 'capacity') capacityOptions = list;
+  else shapeOptions = list;
 
-  const combos = combosOf(attrs);
-  if (!combos.length) {
-    wrap.innerHTML = '<p class="hint small">تعداد ترکیب‌ها زیاد است؛ قیمت همه گزینه‌ها از قیمت پایه/بُعد استفاده می‌کند.</p>';
-    return;
-  }
-
-  const head = document.createElement('div');
-  head.className = 'variant-row variant-head';
-  ['ترکیب', 'قیمت (تومان)', 'موجودی', 'ابعاد (سانتی‌متر)'].forEach((text) => {
-    const span = document.createElement('span');
-    span.textContent = text;
-    head.appendChild(span);
-  });
-  wrap.appendChild(head);
-
-  combos.forEach((combo) => {
-    const row = document.createElement('div');
-    row.className = 'variant-row';
-
-    const label = document.createElement('span');
-    label.textContent = combo.labels.join(' / ');
-
-    const current = currentVariants[combo.key] || {};
-
-    const price = document.createElement('input');
-    price.type = 'number';
-    price.min = '0';
-    price.step = '1000';
-    price.placeholder = 'قیمت';
-    price.value = current.price ?? '';
-    price.oninput = () => updateVariant(combo.key, 'price', price.value);
-
-    const stock = document.createElement('input');
-    stock.type = 'number';
-    stock.min = '0';
-    stock.step = '1';
-    stock.placeholder = 'موجودی';
-    stock.value = current.stock ?? '';
-    stock.oninput = () => updateVariant(combo.key, 'stock', stock.value);
-
-    const dims = document.createElement('input');
-    dims.placeholder = 'مثلاً ۱۲۰×۱۸۰';
-    dims.value = current.dims || '';
-    dims.oninput = () => updateVariant(combo.key, 'dims', dims.value);
-
-    row.append(label, price, stock, dims);
-    wrap.appendChild(row);
-  });
+  input.value = '';
+  renderOptions();
+  toast('گزینه اضافه شد');
 }
 
-$('#btnAddAttr').onclick = () => {
-  currentAttrs.push({ name: '', optionsText: '' });
-  renderAttrs();
-  renderVariants();
-};
+$('#btnAddCapacity').onclick = () => addOptionFromSettings('capacity');
+$('#btnAddShape').onclick = () => addOptionFromSettings('shape');
+$('#newCapacity').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#btnAddCapacity').click();
+});
+$('#newShape').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#btnAddShape').click();
+});
 
+/* ---------------- تصاویر و ویدیو ---------------- */
 $('#btnAddImages').onclick = async () => {
   const picked = await api.pickImages();
   if (picked.length) {
@@ -598,13 +598,6 @@ $('#btnSaveProduct').onclick = async () => {
     colors: $('#f-colors').value,
     description: $('#f-description').value.trim(),
     sizes: currentSizes.filter((s) => String(s.label || '').trim()),
-    attributes: parsedAttrs(),
-    variants: { ...currentVariants },
-    variantPrices: Object.fromEntries(
-      Object.entries(currentVariants)
-        .filter(([, variant]) => Number(variant.price) > 0)
-        .map(([key, variant]) => [key, Number(variant.price)])
-    ),
     video: currentVideo,
     images: currentImages,
     active: $('#f-active').checked,
@@ -753,7 +746,7 @@ function renderOrders(orders) {
     list.className = 'order-items';
     order.items.forEach((item) => {
       const li = document.createElement('li');
-      const extra = [item.size, ...(item.options || [])].filter(Boolean).join(' / ');
+      const extra = [item.size, item.capacity, item.shape, ...(item.options || [])].filter(Boolean).join(' / ');
       li.textContent = `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
       list.appendChild(li);
     });
@@ -786,6 +779,7 @@ $('#btnOpenData').onclick = () => api.openDataDir();
 
 /* ---------------- شروع ---------------- */
 (async function init() {
+  await loadOptions();
   await loadCategories();
   await loadProducts();
   await loadSettings();

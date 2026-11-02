@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * تست دودی رابط کاربری: بارگذاری صفحه، کلیک روی تب تنظیمات و بررسی نبود خطای جاوااسکریپت.
+ * تست دودی رابط کاربری: تب‌ها، فرم محصول، ستون‌های ابعاد، گزینه‌ها، دسته‌بندی و سفارش‌ها.
  * اجرا: npm run test:smoke
  */
 
@@ -15,6 +15,10 @@ ipcMain.handle('categories:list', () => ['رومیزی', 'کاور مبل']);
 ipcMain.handle('categories:add', (_e, name) => ['رومیزی', 'کاور مبل', name]);
 ipcMain.handle('categories:remove', () => ['رومیزی']);
 ipcMain.handle('orders:list', () => []);
+ipcMain.handle('options:list', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
+ipcMain.handle('options:add', (_e, kind, value) => (kind === 'capacity' ? ['۴ نفره', value] : ['دایره', value]));
+ipcMain.handle('options:remove', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
+ipcMain.handle('options:rename', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
 ipcMain.handle('settings:get', () => ({ shopName: '', botToken: '', shopChatId: '', note: '' }));
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), dataDir: '/tmp', platform: process.platform }));
 ipcMain.handle('bot:start', () => ({ running: false, message: 'test' }));
@@ -39,41 +43,29 @@ app.whenReady().then(async () => {
   await new Promise((resolve) => setTimeout(resolve, 600));
 
   const result = await win.webContents.executeJavaScript(`(async () => {
-    const out = { hasApi: !!window.api, tabs: 0, settingsVisible: false, clickedButtons: 0 };
+    const out = { hasApi: !!window.api, tabs: 0, clickedButtons: 0 };
+
     document.querySelectorAll('.tab').forEach(() => out.tabs++);
-    const settingsTab = document.querySelector('[data-tab="settings"]');
-    if (settingsTab) { settingsTab.click(); out.clickedButtons++; }
-    out.settingsVisible = document.getElementById('panel-settings').classList.contains('active');
+
+    document.querySelector('[data-tab="products"]').click();
     const newBtn = document.getElementById('btnNew');
     if (newBtn) { newBtn.click(); out.clickedButtons++; }
     out.modalOpened = !document.getElementById('modal').classList.contains('hidden');
-    out.hasSizeEditor = !!document.getElementById('btnAddSize');
-    out.hasVideoPicker = !!document.getElementById('btnAddVideo');
-    out.categoryOptions = document.getElementById('f-category').options.length;
-    out.categoryChips = document.querySelectorAll('#categoryList .chip').length;
+
     const addSize = document.getElementById('btnAddSize');
     if (addSize) { addSize.click(); out.clickedButtons++; }
-    out.sizeRows = document.querySelectorAll('.size-row').length;
-    out.sizeInputs = document.querySelectorAll('.size-row input').length;
-
-    const addAttr = document.getElementById('btnAddAttr');
-    if (addAttr) { addAttr.click(); out.clickedButtons++; }
-    const attrName = document.querySelector('.attr-row .attr-name');
-    const attrOptions = document.querySelector('.attr-row .attr-options');
-    if (attrName && attrOptions) {
-      attrName.value = 'شکل';
-      attrName.dispatchEvent(new Event('input'));
-      attrOptions.value = 'دایره‌ای، مستطیلی';
-      attrOptions.dispatchEvent(new Event('input'));
-    }
-    out.attrRows = document.querySelectorAll('.attr-row').length;
-    out.variantRows = document.querySelectorAll('.variant-row:not(.variant-head)').length;
-    out.variantInputs = document.querySelectorAll('.variant-row:not(.variant-head) input').length;
-    out.hasSupportField = !!document.getElementById('s-support');
+    out.sizeRows = document.querySelectorAll('.size-row:not(.size-head)').length;
+    out.sizeInputs = document.querySelectorAll('.size-row:not(.size-head) input').length;
+    out.sizeSelects = document.querySelectorAll('.size-row:not(.size-head) select').length;
+    out.capacityOptionCount = document.querySelector('.size-row select')?.options.length || 0;
+    out.hasOldAttrsSection = !!document.getElementById('btnAddAttr');
+    out.hasVideoPicker = !!document.getElementById('btnAddVideo');
 
     document.getElementById('modal').classList.add('hidden');
 
     document.querySelector('[data-tab="settings"]').click();
+    out.settingsVisible = document.getElementById('panel-settings').classList.contains('active');
+
     const newCategory = document.getElementById('newCategory');
     newCategory.value = 'پرده';
     document.getElementById('btnAddCategory').click();
@@ -81,33 +73,41 @@ app.whenReady().then(async () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     out.categoryChipsAfterAdd = document.querySelectorAll('#categoryList .chip').length;
 
+    out.capacityChipsBefore = document.querySelectorAll('#capacityList .chip').length;
+    const newCapacity = document.getElementById('newCapacity');
+    newCapacity.value = '۶ نفره';
+    document.getElementById('btnAddCapacity').click();
+    out.clickedButtons++;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    out.capacityChipsAfter = document.querySelectorAll('#capacityList .chip').length;
+
     document.querySelector('[data-tab="orders"]').click();
     out.ordersVisible = document.getElementById('panel-orders').classList.contains('active');
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
     out.hasShippingField = !!document.getElementById('s-shipping');
     out.hasMessengerSelect = document.getElementById('s-messenger').options.length === 2;
+    out.hasSupportField = !!document.getElementById('s-support');
     return out;
   })()`);
 
   const ok =
     result.hasApi &&
     result.tabs === 3 &&
-    result.settingsVisible &&
     result.modalOpened &&
-    result.hasSizeEditor &&
+    result.sizeRows === 1 &&
+    result.sizeInputs === 3 &&
+    result.sizeSelects === 2 &&
+    result.capacityOptionCount >= 3 &&
+    result.hasOldAttrsSection === false &&
     result.hasVideoPicker &&
-    result.categoryOptions >= 3 &&
-    result.categoryChips === 2 &&
+    result.settingsVisible &&
     result.categoryChipsAfterAdd === 3 &&
+    result.capacityChipsBefore === 1 &&
+    result.capacityChipsAfter === 2 &&
     result.ordersVisible &&
     result.ordersEmptyShown &&
     result.hasShippingField &&
     result.hasMessengerSelect &&
-    result.sizeRows === 1 &&
-    result.sizeInputs === 3 &&
-    result.attrRows === 1 &&
-    result.variantRows === 2 &&
-    result.variantInputs === 6 &&
     result.hasSupportField &&
     consoleErrors.length === 0;
 

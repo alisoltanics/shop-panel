@@ -13,6 +13,7 @@ class Store {
       products: [],
       settings: {},
       categories: [],
+      options: { capacity: [], shape: [] },
       customers: {},
       orders: [],
       outbox: [],
@@ -30,6 +31,10 @@ class Store {
         products: Array.isArray(raw.products) ? raw.products : [],
         settings: raw.settings && typeof raw.settings === 'object' ? raw.settings : {},
         categories: Array.isArray(raw.categories) ? raw.categories : [],
+        options: {
+          capacity: Array.isArray(raw.options?.capacity) ? raw.options.capacity.map(String) : [],
+          shape: Array.isArray(raw.options?.shape) ? raw.options.shape.map(String) : [],
+        },
         customers: raw.customers && typeof raw.customers === 'object' ? raw.customers : {},
         orders: Array.isArray(raw.orders) ? raw.orders : [],
         outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
@@ -54,6 +59,8 @@ class Store {
       p.sizes = p.sizes
         .map((s) => ({
           label: String(s?.label ?? s ?? '').trim(),
+          capacity: String(s?.capacity ?? '').trim(),
+          shape: String(s?.shape ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
           stock:
             s?.stock === null || s?.stock === undefined || s?.stock === ''
@@ -90,7 +97,65 @@ class Store {
         variant.dims = String(variant.dims || '').trim();
       }
     }
+    for (const p of this.data.products) {
+      if (this.convertLegacyAttributes(p)) changed = true;
+    }
+
     if (changed) this.save();
+  }
+
+  /** ترکیب‌های ویژگی‌های نسخه‌های قبلی را به ردیف‌های ابعاد تبدیل می‌کند. */
+  convertLegacyAttributes(product) {
+    const attrs = Array.isArray(product.attributes)
+      ? product.attributes.filter((a) => a && a.name && Array.isArray(a.options) && a.options.length)
+      : [];
+    if (!attrs.length || (product.sizes && product.sizes.length)) return false;
+
+    const combos = [{ key: '', labels: [] }];
+    for (const attr of attrs) {
+      const next = [];
+      for (const combo of combos) {
+        attr.options.forEach((option, index) => {
+          next.push({
+            key: combo.key ? `${combo.key}-${index}` : String(index),
+            labels: [...combo.labels, String(option)],
+            names: [...(combo.names || []), attr.name],
+          });
+        });
+      }
+      combos.length = 0;
+      combos.push(...next);
+    }
+
+    const pick = (combo, pattern) => {
+      const index = (combo.names || []).findIndex((name) => pattern.test(name));
+      return index >= 0 ? combo.labels[index] : '';
+    };
+
+    product.sizes = combos.map((combo) => {
+      const variant = (product.variants && product.variants[combo.key]) || {};
+      return {
+        label: variant.dims || combo.labels.join(' / '),
+        capacity: pick(combo, /ظرفیت|تعداد|نفره|نفرات/),
+        shape: pick(combo, /شکل/),
+        price: Number(variant.price) > 0 ? Number(variant.price) : null,
+        stock: variant.stock === undefined ? null : variant.stock,
+      };
+    });
+
+    for (const size of product.sizes) {
+      if (size.capacity && !this.data.options.capacity.includes(size.capacity)) {
+        this.data.options.capacity.push(size.capacity);
+      }
+      if (size.shape && !this.data.options.shape.includes(size.shape)) {
+        this.data.options.shape.push(size.shape);
+      }
+    }
+
+    product.attributes = [];
+    product.variants = {};
+    product.variantPrices = {};
+    return true;
   }
 
   save() {
@@ -117,6 +182,8 @@ class Store {
       sizes: (Array.isArray(input.sizes) ? input.sizes : [])
         .map((s) => ({
           label: String(s?.label ?? '').trim(),
+          capacity: String(s?.capacity ?? '').trim(),
+          shape: String(s?.shape ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
           stock:
             s?.stock === null || s?.stock === undefined || s?.stock === ''
@@ -168,6 +235,16 @@ class Store {
 
     if (!clean.name) throw new Error('نام محصول الزامی است');
 
+    // گزینه‌های جدید واردشده در فرم را به لیست‌های دائمی اضافه کن
+    for (const size of clean.sizes) {
+      if (size.capacity && !this.data.options.capacity.includes(size.capacity)) {
+        this.data.options.capacity.push(size.capacity);
+      }
+      if (size.shape && !this.data.options.shape.includes(size.shape)) {
+        this.data.options.shape.push(size.shape);
+      }
+    }
+
     if (input.id) {
       const idx = this.data.products.findIndex((p) => p.id === Number(input.id));
       if (idx === -1) throw new Error('محصول پیدا نشد');
@@ -209,6 +286,45 @@ class Store {
     this.data.categories = this.data.categories.filter((c) => c !== String(name));
     this.save();
     return this.listCategories();
+  }
+
+  /* ---------- گزینه‌های تعداد نفرات و شکل ---------- */
+
+  listOptions(kind) {
+    return [...(this.data.options[kind] || [])];
+  }
+
+  addOption(kind, value) {
+    const list = this.data.options[kind] || (this.data.options[kind] = []);
+    const v = String(value || '').trim();
+    if (v && !list.includes(v)) {
+      list.push(v);
+      this.save();
+    }
+    return [...list];
+  }
+
+  removeOption(kind, value) {
+    this.data.options[kind] = (this.data.options[kind] || []).filter((o) => o !== String(value));
+    this.save();
+    return [...this.data.options[kind]];
+  }
+
+  renameOption(kind, from, to) {
+    const list = this.data.options[kind] || (this.data.options[kind] = []);
+    const value = String(to || '').trim();
+    const index = list.indexOf(String(from));
+    if (value && index !== -1) {
+      list[index] = value;
+      for (const product of this.data.products) {
+        for (const size of product.sizes || []) {
+          if (kind === 'capacity' && size.capacity === from) size.capacity = value;
+          if (kind === 'shape' && size.shape === from) size.shape = value;
+        }
+      }
+      this.save();
+    }
+    return [...list];
   }
 
   /* ---------- مشتری‌ها ---------- */
@@ -269,7 +385,12 @@ class Store {
       const product = this.data.products.find((p) => p.id === Number(item.productId));
       if (!product) continue;
 
-      const size = item.size ? (product.sizes || []).find((s) => s.label === item.size) : null;
+      const size = (product.sizes || []).find(
+        (s) =>
+          s.label === item.size &&
+          (s.capacity || '') === (item.capacity || '') &&
+          (s.shape || '') === (item.shape || '')
+      );
       if (size && size.stock !== null && size.stock !== undefined) {
         size.stock = Math.max(0, Number(size.stock) - Number(item.qty || 0));
       }

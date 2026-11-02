@@ -45,13 +45,14 @@ function attributesOf(product) {
 }
 
 /** اولویت قیمت: قیمت ترکیب گزینه‌ها ← قیمت بُعد ← قیمت پایه */
-function priceFor(product, sizeLabel, indices = []) {
+function priceFor(product, sizeRow, indices = []) {
   const key = (indices || []).join('-');
   const variantPrice = Number(product.variants?.[key]?.price);
   if (variantPrice > 0) return variantPrice;
   const combo = Number(product.variantPrices?.[key]);
   if (combo > 0) return combo;
-  return priceOf(product, sizeLabel);
+  if (sizeRow && Number(sizeRow.price) > 0) return Number(sizeRow.price);
+  return Number(product.price) || 0;
 }
 
 function variantOf(product, indices = []) {
@@ -74,7 +75,10 @@ function productCaption(product) {
   if (product.category) lines.push(`📦 دسته: ${esc(product.category)}`);
   if (product.material) lines.push(`🧵 جنس: ${esc(product.material)}`);
   if (product.colors?.length) lines.push(`🎨 رنگ‌ها: ${esc(product.colors.join('، '))}`);
-  if (sizes.length) lines.push(`📏 ابعاد: ${esc(sizes.map((s) => s.label).join(' | '))}`);
+  if (sizes.length) {
+    const rows = sizes.map((s) => [s.label, s.capacity, s.shape].filter(Boolean).join(' / '));
+    lines.push(`📏 ابعاد: ${esc(rows.join(' | '))}`);
+  }
   attributesOf(product).forEach((attr) => lines.push(`⚙️ ${esc(attr.name)}: ${esc(attr.options.join(' | '))}`));
   lines.push(`📦 موجودی: ${Number(product.stock) || 0}`);
   if (product.description) lines.push('', esc(product.description));
@@ -127,16 +131,27 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         cart.delete(key);
         continue;
       }
+      const sizeRow =
+        (product.sizes || []).find(
+          (s) =>
+            s.label === (item.size || '') &&
+            (s.capacity || '') === (item.capacity || '') &&
+            (s.shape || '') === (item.shape || '')
+        ) || null;
+
       items.push({
         key,
         product,
         size: item.size || '',
+        capacity: item.capacity || '',
+        shape: item.shape || '',
+        sizeRow,
         options: item.options || [],
         indices: item.indices || [],
         variantKey: item.variantKey || '',
         dims: item.dims || '',
         qty: item.qty,
-        unitPrice: priceFor(product, item.size, item.indices),
+        unitPrice: Number(item.unitPrice) > 0 ? Number(item.unitPrice) : priceFor(product, sizeRow, item.indices),
       });
     }
     return items;
@@ -265,24 +280,23 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
   function cartLine(item, index) {
     const parts = [item.product.name];
     if (item.size) parts.push(`بُعد: ${item.size}`);
+    if (item.capacity) parts.push(item.capacity);
+    if (item.shape) parts.push(item.shape);
     if (item.options?.length) parts.push(`گزینه‌ها: ${item.options.join(' / ')}`);
     if (item.dims) parts.push(`ابعاد: ${item.dims}`);
     return `${index + 1}) ${esc(parts.join(' — '))} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
   }
 
-  async function addToCart(chatId, product, size, indices, labels) {
+  async function addToCart(chatId, product, sizeRow, indices, labels) {
     const variant = variantOf(product, indices);
+    const size = sizeRow?.label || '';
+    const capacity = sizeRow?.capacity || '';
+    const shape = sizeRow?.shape || '';
     const cart = cartOf(chatId);
-    const key = `${product.id}|${size}|${(indices || []).join('-')}`;
+    const key = `${product.id}|${size}|${capacity}|${shape}|${(indices || []).join('-')}`;
     const entry = cart.get(key);
 
-    const sizeInfo = size ? sizeOf(product, size) : null;
-    if (
-      sizeInfo &&
-      sizeInfo.stock !== null &&
-      sizeInfo.stock !== undefined &&
-      sizeInfo.stock <= (entry?.qty || 0)
-    ) {
+    if (sizeRow && sizeRow.stock !== null && sizeRow.stock !== undefined && sizeRow.stock <= (entry?.qty || 0)) {
       pickers.delete(chatId);
       return bot.sendMessage(chatId, '⚠️ موجودی این بُعد تمام شده است.');
     }
@@ -295,11 +309,14 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
     cart.set(key, {
       id: product.id,
       size,
+      capacity,
+      shape,
       indices: indices || [],
       options: labels || [],
       variantKey: variant.key,
       dims: variant.dims,
       qty: (entry?.qty || 0) + 1,
+      unitPrice: priceFor(product, sizeRow, indices),
     });
     pickers.delete(chatId);
     const v = cartView(chatId);
@@ -318,7 +335,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
 
     const attrs = attributesOf(product);
     if (picker.attrIndex >= attrs.length) {
-      return addToCart(chatId, product, picker.sizeLabel, picker.indices, picker.labels);
+      return addToCart(chatId, product, picker.sizeRow, picker.indices, picker.labels);
     }
 
     const attr = attrs[picker.attrIndex];
@@ -339,14 +356,14 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
 
     const sizes = sizesOf(product);
     const attrs = attributesOf(product);
-    if (!sizes.length && !attrs.length) return addToCart(chatId, product, '', [], []);
+    if (!sizes.length && !attrs.length) return addToCart(chatId, product, null, [], []);
 
-    const picker = { productId: product.id, sizeIndex: -1, sizeLabel: '', attrIndex: 0, indices: [], labels: [] };
+    const picker = { productId: product.id, sizeIndex: -1, sizeRow: null, attrIndex: 0, indices: [], labels: [] };
     pickers.set(chatId, picker);
 
     if (typeof sizeIndex === 'number' && sizeIndex >= 0 && sizes[sizeIndex]) {
       picker.sizeIndex = sizeIndex;
-      picker.sizeLabel = sizes[sizeIndex].label;
+      picker.sizeRow = sizes[sizeIndex];
       return sendAttributeStep(chatId);
     }
 
@@ -354,9 +371,10 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
       const rows = sizes.map((size, index) => {
         const stock = size.stock === null || size.stock === undefined ? null : Number(size.stock);
         const suffix = stock === null ? '' : stock > 0 ? ` (${stock} عدد)` : ' (ناموجود)';
+        const title = [size.label, size.capacity, size.shape].filter(Boolean).join(' / ');
         return [
           {
-            text: `${size.label} — ${money(Number(size.price) > 0 ? size.price : product.price)}${suffix}`,
+            text: `${title} — ${money(Number(size.price) > 0 ? size.price : product.price)}${suffix}`,
             callback_data: `s:${product.id}:${index}`,
           },
         ];
@@ -387,6 +405,8 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
       ...order.items.map(
         (i, n) =>
           `${n + 1}) ${esc(i.name)}${i.size ? ` — بُعد: ${esc(i.size)}` : ''}${
+            i.capacity ? ` — تعداد: ${esc(i.capacity)}` : ''
+          }${i.shape ? ` — شکل: ${esc(i.shape)}` : ''}${
             i.options?.length ? ` — گزینه‌ها: ${esc(i.options.join(' / '))}` : ''
           }${i.dims ? ` — ابعاد: ${esc(i.dims)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
       ),
@@ -426,7 +446,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
       const file = path.join(imagesDir, image);
       if (!fs.existsSync(file)) continue;
       try {
-        const extra = [item.size, ...(item.options || [])].filter(Boolean).join(' / ');
+        const extra = [item.size, item.capacity, item.shape, ...(item.options || [])].filter(Boolean).join(' / ');
         await bot.sendPhoto(shopTarget(), file, { caption: `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty}` });
       } catch {}
     }
@@ -511,6 +531,8 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         productId: i.product.id,
         name: i.product.name,
         size: i.size || null,
+        capacity: i.capacity || '',
+        shape: i.shape || '',
         options: i.options || [],
         variantKey: i.variantKey || '',
         dims: i.dims || '',
@@ -691,7 +713,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
         if (!sizes[index]) return bot.answerCallbackQuery(q.id, { text: 'گزینه نامعتبر' });
 
         picker.sizeIndex = index;
-        picker.sizeLabel = sizes[index].label;
+        picker.sizeRow = sizes[index];
         await bot.answerCallbackQuery(q.id, { text: sizes[index].label });
         return sendAttributeStep(chatId);
       }

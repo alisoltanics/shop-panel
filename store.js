@@ -245,6 +245,12 @@ class Store {
       }
     }
 
+    // اگر برای ابعاد موجودی ثبت شده باشد، موجودی کل = جمع موجودی ابعاد
+    const sizedStock = clean.sizes.filter((s) => s.stock !== null && s.stock !== undefined);
+    if (sizedStock.length) {
+      clean.stock = sizedStock.reduce((sum, s) => sum + Number(s.stock || 0), 0);
+    }
+
     if (input.id) {
       const idx = this.data.products.findIndex((p) => p.id === Number(input.id));
       if (idx === -1) throw new Error('محصول پیدا نشد');
@@ -416,6 +422,7 @@ class Store {
     const entry = {
       id: ++this.data.nextOutboxId,
       createdAt: Date.now(),
+      messenger: String(item.messenger || ''),
       chatId: String(item.chatId || ''),
       text: String(item.text || ''),
       markup: item.markup || null,
@@ -425,8 +432,9 @@ class Store {
     return entry;
   }
 
-  listOutbox() {
-    return [...this.data.outbox];
+  listOutbox(messenger) {
+    if (!messenger) return [...this.data.outbox];
+    return this.data.outbox.filter((item) => !item.messenger || item.messenger === messenger);
   }
 
   removeOutbox(id) {
@@ -435,28 +443,47 @@ class Store {
   }
 
   getSettings() {
+    const s = this.data.settings || {};
+    const legacy = {
+      token: String(s.botToken || '').trim(),
+      shopChatId: String(s.shopChatId || '').trim(),
+      supportUsername: String(s.supportUsername || 'MeadowSupport').replace(/^@/, '').trim(),
+    };
+
+    const telegram = s.telegram && typeof s.telegram === 'object' ? s.telegram : s.messenger === 'bale' ? {} : legacy;
+    const bale = s.bale && typeof s.bale === 'object' ? s.bale : s.messenger === 'bale' ? legacy : {};
+
     return {
-      shopName: '',
-      botToken: '',
-      shopChatId: '',
-      note: '',
-      messenger: 'telegram',
-      shippingPrice: 0,
-      supportUsername: 'MeadowSupport',
-      ...this.data.settings,
+      shopName: String(s.shopName || '').trim(),
+      note: String(s.note || ''),
+      shippingPrice: Math.max(0, Number(s.shippingPrice) || 0),
+      telegram: {
+        token: String(telegram?.token || '').trim(),
+        shopChatId: String(telegram?.shopChatId || '').trim(),
+        supportUsername: String(telegram?.supportUsername || 'MeadowSupport').replace(/^@/, '').trim(),
+      },
+      bale: {
+        token: String(bale?.token || '').trim(),
+        shopChatId: String(bale?.shopChatId || '').trim(),
+        supportUsername: String(bale?.supportUsername || '').replace(/^@/, '').trim(),
+      },
     };
   }
 
   saveSettings(input = {}) {
+    const normalize = (value, fallbackSupport) => ({
+      token: String(value?.token || '').trim(),
+      shopChatId: String(value?.shopChatId || '').trim(),
+      supportUsername: String(value?.supportUsername ?? fallbackSupport).replace(/^@/, '').trim(),
+    });
+
     this.data.settings = {
       ...this.data.settings,
       shopName: String(input.shopName || '').trim(),
-      botToken: String(input.botToken || '').trim(),
-      shopChatId: String(input.shopChatId || '').trim(),
-      note: String(input.note || '').trim(),
-      messenger: input.messenger === 'bale' ? 'bale' : 'telegram',
+      note: String(input.note || ''),
       shippingPrice: Math.max(0, Number(input.shippingPrice) || 0),
-      supportUsername: String(input.supportUsername || 'MeadowSupport').replace(/^@/, '').trim(),
+      telegram: normalize(input.telegram, 'MeadowSupport'),
+      bale: normalize(input.bale, ''),
     };
     this.save();
     return this.getSettings();

@@ -143,6 +143,13 @@ function sizeSummary(size) {
   return [size.label, size.capacity, size.shape].filter(Boolean).join(' • ');
 }
 
+/** موجودی کل: اگر ابعاد موجودی داشته باشند، جمع آن‌ها */
+function effectiveStock(product) {
+  const sized = (product.sizes || []).filter((s) => s.stock !== null && s.stock !== undefined);
+  if (sized.length) return sized.reduce((sum, s) => sum + Number(s.stock || 0), 0);
+  return Number(product.stock) || 0;
+}
+
 function renderGrid() {
   const q = $('#search').value.trim().toLowerCase();
   const cat = $('#filterCat').value;
@@ -183,7 +190,7 @@ function renderGrid() {
     meta.className = 'p-meta';
     const sizeCount = (p.sizes || []).length;
     const parts = [
-      `موجودی: ${Number(p.stock) || 0}`,
+      `موجودی: ${effectiveStock(p)}`,
       p.active === false ? '⛔ غیرفعال' : '✅ فعال',
       `${p.images?.length || 0} عکس`,
       sizeCount ? `${sizeCount} بُعد` : '',
@@ -643,17 +650,30 @@ $('#newCategory').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') $('#btnAddCategory').click();
 });
 
-/* ---------------- تنظیمات و ربات ---------------- */
-const MESSENGER_HELP = {
-  telegram:
-    '۱) در تلگرام به @BotFather پیام بدهید، دستور /newbot را بزنید و توکن ربات را کپی کنید. ۲) با اکانت تلگرام فروشگاه، ربات را باز کنید، /start بدهید و بعد /id بفرستید؛ عددی که نشان می‌دهد «چت آیدی فروشگاه» است. ۳) توکن و چت آیدی را همین‌جا وارد و ذخیره کنید؛ ربات خودکار روشن می‌شود.',
-  bale:
-    '۱) در پیام‌رسان بله به @BotFather پیام بدهید، ربات بسازید و توکن را کپی کنید. ۲) با اکانت بله فروشگاه، همان ربات را باز کنید، /start بدهید و سپس /id بفرستید تا «چت آیدی فروشگاه» را بگیرید. ۳) پیام‌رسان را روی «بله» بگذارید، توکن و چت آیدی را ذخیره کنید.',
+/* ---------------- تنظیمات و ربات‌ها ---------------- */
+const botStates = {
+  telegram: { running: false, message: 'غیرفعال' },
+  bale: { running: false, message: 'غیرفعال' },
 };
 
-function updateMessengerHelp() {
-  const messenger = $('#s-messenger').value === 'bale' ? 'bale' : 'telegram';
-  $('#messengerHelp').textContent = MESSENGER_HELP[messenger];
+function updateBotPill() {
+  const pill = $('#botPill');
+  const active = Object.entries(botStates)
+    .filter(([, state]) => state.running)
+    .map(([messenger]) => (messenger === 'bale' ? 'بله' : 'تلگرام'));
+  pill.textContent = active.length ? `ربات‌ها: ${active.join(' + ')}` : 'ربات‌ها: غیرفعال';
+  pill.classList.toggle('on', active.length > 0);
+  pill.classList.toggle('off', active.length === 0);
+}
+
+function applyBotStatus(status) {
+  const messenger = status?.messenger === 'bale' ? 'bale' : 'telegram';
+  botStates[messenger] = { running: !!status?.running, message: status?.message || '' };
+
+  const line = $(messenger === 'bale' ? '#bale-status' : '#tg-status');
+  if (line) line.textContent = `وضعیت: ${status?.message || (status?.running ? 'فعال' : 'غیرفعال')}`;
+
+  updateBotPill();
 }
 
 async function loadSettings() {
@@ -661,50 +681,61 @@ async function loadSettings() {
   $('#s-shopName').value = s.shopName || '';
   $('#s-note').value = s.note || '';
   $('#s-shipping').value = s.shippingPrice || 0;
-  $('#s-messenger').value = s.messenger || 'telegram';
-  $('#s-botToken').value = s.botToken || '';
-  $('#s-shopChatId').value = s.shopChatId || '';
-  $('#s-support').value = s.supportUsername || 'MeadowSupport';
-  updateMessengerHelp();
-}
+  $('#tg-token').value = s.telegram?.token || '';
+  $('#tg-chat').value = s.telegram?.shopChatId || '';
+  $('#tg-support').value = s.telegram?.supportUsername || 'MeadowSupport';
+  $('#bale-token').value = s.bale?.token || '';
+  $('#bale-chat').value = s.bale?.shopChatId || '';
+  $('#bale-support').value = s.bale?.supportUsername || '';
 
-function applyBotStatus(status) {
-  const pill = $('#botPill');
-  const text = $('#botStatusText');
-  pill.textContent = `ربات: ${status.running ? 'فعال' : 'غیرفعال'}`;
-  pill.classList.toggle('on', !!status.running);
-  pill.classList.toggle('off', !status.running);
-  pill.title = status.message || '';
-  text.textContent = `وضعیت: ${status.message || '—'}`;
+  try {
+    const statuses = await api.getBotStatuses();
+    applyBotStatus({ messenger: 'telegram', ...(statuses.telegram || {}) });
+    applyBotStatus({ messenger: 'bale', ...(statuses.bale || {}) });
+  } catch {
+    updateBotPill();
+  }
 }
-
-$('#s-messenger').addEventListener('change', updateMessengerHelp);
 
 $('#btnSaveSettings').onclick = async () => {
-  const { botStatus } = await api.saveSettings({
+  const result = await api.saveSettings({
     shopName: $('#s-shopName').value,
     note: $('#s-note').value,
     shippingPrice: $('#s-shipping').value,
-    messenger: $('#s-messenger').value,
-    botToken: $('#s-botToken').value,
-    shopChatId: $('#s-shopChatId').value,
-    supportUsername: $('#s-support').value,
+    telegram: {
+      token: $('#tg-token').value,
+      shopChatId: $('#tg-chat').value,
+      supportUsername: $('#tg-support').value,
+    },
+    bale: {
+      token: $('#bale-token').value,
+      shopChatId: $('#bale-chat').value,
+      supportUsername: $('#bale-support').value,
+    },
   });
-  applyBotStatus(botStatus);
+
+  const statuses = result.botStatuses || {};
+  applyBotStatus({ messenger: 'telegram', ...(statuses.telegram || {}) });
+  applyBotStatus({ messenger: 'bale', ...(statuses.bale || {}) });
   toast('تنظیمات ذخیره شد');
 };
 
-$('#btnBotStart').onclick = async () => {
-  const status = await api.botStart();
-  applyBotStatus(status);
+async function startBot(messenger) {
+  const status = await api.botStart(messenger);
+  applyBotStatus({ messenger, ...status });
   toast(status.running ? 'ربات روشن شد' : status.message, !status.running);
-};
+}
 
-$('#btnBotStop').onclick = async () => {
-  const status = await api.botStop();
-  applyBotStatus(status);
+async function stopBot(messenger) {
+  const status = await api.botStop(messenger);
+  applyBotStatus({ messenger, ...status });
   toast('ربات خاموش شد');
-};
+}
+
+$('#tg-start').onclick = () => startBot('telegram');
+$('#tg-stop').onclick = () => stopBot('telegram');
+$('#bale-start').onclick = () => startBot('bale');
+$('#bale-stop').onclick = () => stopBot('bale');
 
 /* ---------------- سفارش‌ها ---------------- */
 function formatDate(ts) {

@@ -10,8 +10,13 @@ const { startBot } = require('./bot');
 
 let store = null;
 let mainWindow = null;
-let bot = null;
-let botStatus = { running: false, message: 'غیرفعال' };
+
+const MESSENGERS = ['telegram', 'bale'];
+const bots = { telegram: null, bale: null };
+const botStatuses = {
+  telegram: { running: false, message: 'غیرفعال' },
+  bale: { running: false, message: 'غیرفعال' },
+};
 
 const imagesDir = () => path.join(app.getPath('userData'), 'images');
 const videosDir = () => path.join(app.getPath('userData'), 'videos');
@@ -41,56 +46,76 @@ const MIME = {
   '.mkv': 'video/x-matroska',
 };
 
-function setBotStatus(status) {
-  botStatus = status;
+function setBotStatus(messenger, status) {
+  botStatuses[messenger] = status;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('bot:status', status);
+    mainWindow.webContents.send('bot:status', { messenger, ...status });
   }
 }
 
-async function startBotFromSettings() {
-  if (bot) return botStatus;
+function broadcastStock() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('products:changed');
+  }
+}
 
-  const { botToken } = store.getSettings();
-  if (!botToken) {
-    setBotStatus({ running: false, message: 'توکن ربات تنظیم نشده است' });
-    return botStatus;
+async function startBotFor(messenger) {
+  if (bots[messenger]) return botStatuses[messenger];
+
+  const config = store.getSettings()[messenger] || {};
+  if (!config.token) {
+    setBotStatus(messenger, { running: false, message: 'توکن تنظیم نشده است' });
+    return botStatuses[messenger];
   }
 
-  setBotStatus({ running: false, message: 'در حال اتصال...' });
+  setBotStatus(messenger, { running: false, message: 'در حال اتصال...' });
   try {
-    bot = await startBot({
-      token: botToken,
-      messenger: store.getSettings().messenger,
+    bots[messenger] = await startBot({
+      token: config.token,
+      messenger,
       store,
       imagesDir: imagesDir(),
       videosDir: videosDir(),
-      getShopChatId: () => store.getSettings().shopChatId,
-      onStatus: setBotStatus,
-      onStockChanged: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('products:changed');
-        }
+      getConfig: () => {
+        const settings = store.getSettings();
+        return {
+          shopName: settings.shopName,
+          shippingPrice: settings.shippingPrice,
+          shopChatId: settings[messenger]?.shopChatId || '',
+          supportUsername: settings[messenger]?.supportUsername || '',
+        };
       },
+      onStatus: (status) => setBotStatus(messenger, status),
+      onStockChanged: broadcastStock,
     });
   } catch (err) {
-    bot = null;
-    setBotStatus({ running: false, message: err.message });
+    bots[messenger] = null;
+    setBotStatus(messenger, { running: false, message: err.message });
   }
-  return botStatus;
+  return botStatuses[messenger];
 }
 
-async function stopBot() {
-  if (bot) {
+async function stopBotFor(messenger) {
+  const instance = bots[messenger];
+  if (instance) {
     try {
-      await bot.stopPolling({ cancel: true });
+      await instance.stopPolling({ cancel: true });
     } catch {}
     try {
-      bot.removeAllListeners();
+      instance.removeAllListeners();
     } catch {}
-    bot = null;
+    bots[messenger] = null;
   }
-  setBotStatus({ running: false, message: 'غیرفعال' });
+  setBotStatus(messenger, { running: false, message: 'غیرفعال' });
+  return botStatuses[messenger];
+}
+
+async function startAllBots() {
+  await Promise.all(MESSENGERS.map((messenger) => startBotFor(messenger)));
+}
+
+async function stopAllBots() {
+  await Promise.all(MESSENGERS.map((messenger) => stopBotFor(messenger)));
 }
 
 function createWindow() {
@@ -112,7 +137,9 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow.webContents.send('bot:status', botStatus);
+    MESSENGERS.forEach((messenger) => {
+      mainWindow.webContents.send('bot:status', { messenger, ...botStatuses[messenger] });
+    });
   });
 }
 
@@ -151,10 +178,8 @@ app.whenReady().then(async () => {
   registerIpc();
   createWindow();
 
-  // اگر توکن ذخیره شده بود، ربات خودکار بالا بیاید
-  if (store.getSettings().botToken) {
-    startBotFromSettings();
-  }
+  // هر پیام‌رسانی که توکن دارد خودکار بالا می‌آید
+  startAllBots();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -166,11 +191,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  if (bot) {
+  MESSENGERS.forEach((messenger) => {
     try {
-      bot.stopPolling({ cancel: true });
+      bots[messenger]?.stopPolling({ cancel: true });
     } catch {}
-  }
+  });
 });
 
 function registerIpc() {
@@ -249,28 +274,27 @@ function registerIpc() {
 
   ipcMain.handle('settings:save', async (_e, settings) => {
     const saved = store.saveSettings(settings || {});
-    if (bot) {
-      await stopBot();
-      await startBotFromSettings();
-    } else if (saved.botToken) {
-      await startBotFromSettings();
-    }
-    return { settings: saved, botStatus };
+    await stopAllBots();
+    await startAllBots();
+    return { settings: saved, botStatuses };
   });
 
-  ipcMain.handle('bot:start', async () => {
-    if (!store.getSettings().botToken) {
-      setBotStatus({ running: false, message: 'اول توکن ربات را ذخیره کنید' });
-      return botStatus;
+  ipcMain.handle('bot:start', async (_e, messenger) => {
+    const target = messenger === 'bale' ? 'bale' : 'telegram';
+    if (!store.getSettings()[target]?.token) {
+      setBotStatus(target, { running: false, message: 'اول توکن ربات را ذخیره کنید' });
+      return botStatuses[target];
     }
-    await startBotFromSettings();
-    return botStatus;
+    await startBotFor(target);
+    return botStatuses[target];
   });
 
-  ipcMain.handle('bot:stop', async () => {
-    await stopBot();
-    return botStatus;
+  ipcMain.handle('bot:stop', async (_e, messenger) => {
+    const target = messenger === 'bale' ? 'bale' : 'telegram';
+    return stopBotFor(target);
   });
+
+  ipcMain.handle('bot:statuses', () => botStatuses);
 
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),

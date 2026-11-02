@@ -80,7 +80,11 @@ function productCaption(product) {
     lines.push(`📏 ابعاد: ${esc(rows.join(' | '))}`);
   }
   attributesOf(product).forEach((attr) => lines.push(`⚙️ ${esc(attr.name)}: ${esc(attr.options.join(' | '))}`));
-  lines.push(`📦 موجودی: ${Number(product.stock) || 0}`);
+  const sized = sizes.filter((s) => s.stock !== null && s.stock !== undefined);
+  const totalStock = sized.length
+    ? sized.reduce((sum, s) => sum + Number(s.stock || 0), 0)
+    : Number(product.stock) || 0;
+  lines.push(`📦 موجودی: ${totalStock}`);
   if (product.description) lines.push('', esc(product.description));
 
   const prices = [
@@ -93,9 +97,20 @@ function productCaption(product) {
   return lines.join('\n');
 }
 
-async function startBot({ token, messenger = 'telegram', store, imagesDir, videosDir, getShopChatId, onStatus, onStockChanged }) {
+async function startBot({
+  token,
+  messenger = 'telegram',
+  store,
+  imagesDir,
+  videosDir,
+  getConfig,
+  getShopChatId,
+  onStatus,
+  onStockChanged,
+}) {
   const baseUrl = messenger === 'bale' ? `https://tapi.bale.ai/bot${String(token).trim()}` : undefined;
   const bot = new TelegramClient(token, { baseUrl });
+  const config = () => (typeof getConfig === 'function' ? getConfig() : {}) || {};
 
   let me;
   try {
@@ -107,9 +122,10 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
   const carts = new Map(); // chatId -> Map(key -> { id, size, qty })
   const sessions = new Map(); // chatId -> { step, data }
 
-  const shopName = () => store.getSettings().shopName || 'فروشگاه';
-  const shopChatId = () => String(getShopChatId() || '').trim();
-  const shippingFee = () => Math.max(0, Number(store.getSettings().shippingPrice) || 0);
+  const shopName = () => config().shopName || store.getSettings().shopName || 'فروشگاه';
+  const shopChatId = () =>
+    String(config().shopChatId || (typeof getShopChatId === 'function' ? getShopChatId() : '') || '').trim();
+  const shippingFee = () => Math.max(0, Number(config().shippingPrice) || 0);
 
   const shopTarget = () => {
     const value = shopChatId();
@@ -430,7 +446,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
       return true;
     } catch {
       // آفلاین یا خطای شبکه → صف ارسال
-      store.enqueueOutbox({ chatId: String(target), text, markup: markup || null });
+      store.enqueueOutbox({ messenger, chatId: String(target), text, markup: markup || null });
       return false;
     }
   }
@@ -455,7 +471,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
 
   async function flushOutbox() {
     const now = Date.now();
-    for (const item of store.listOutbox()) {
+    for (const item of store.listOutbox(messenger)) {
       if (now - item.createdAt > OUTBOX_MAX_AGE) {
         store.removeOutbox(item.id);
         continue;
@@ -548,7 +564,7 @@ async function startBot({ token, messenger = 'telegram', store, imagesDir, video
     const sent = await sendOrderToShop(order);
 
     // دکمه لینک: چت پشتیبانی فروشگاه با پیام آماده باز می‌شود
-    const support = String(store.getSettings().supportUsername || 'MeadowSupport').replace(/^@/, '').trim();
+    const support = String(config().supportUsername || 'MeadowSupport').replace(/^@/, '').trim();
     const supportText = `سلام، برای نهایی کردن سفارش #${order.code} پیام می‌دهم.\nمبلغ کل: ${money(order.total)}`;
     const supportUrl =
       messenger === 'bale'

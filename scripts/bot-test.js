@@ -91,7 +91,12 @@ function check(label, condition, extra = '') {
 (async () => {
   const file = path.join(os.tmpdir(), `shop-bot-test-${Date.now()}.json`);
   const store = new Store(file);
-  store.saveSettings({ shopName: 'فروشگاه تست', botToken: 'x', shopChatId: '999', shippingPrice: 25000 });
+  store.saveSettings({
+    shopName: 'فروشگاه تست',
+    shippingPrice: 25000,
+    telegram: { token: 'x', shopChatId: '999', supportUsername: 'MeadowSupport' },
+    bale: {},
+  });
   const product = store.saveProduct({
     name: 'رومیزی تست',
     price: 100000,
@@ -106,10 +111,19 @@ function check(label, condition, extra = '') {
   let stockChanged = 0;
   const bot = await startBot({
     token: 'x',
+    messenger: 'telegram',
     store,
     imagesDir: os.tmpdir(),
     videosDir: os.tmpdir(),
-    getShopChatId: () => store.getSettings().shopChatId,
+    getConfig: () => {
+      const s = store.getSettings();
+      return {
+        shopName: s.shopName,
+        shippingPrice: s.shippingPrice,
+        shopChatId: s.telegram.shopChatId,
+        supportUsername: s.telegram.supportUsername,
+      };
+    },
     onStatus: () => {},
     onStockChanged: () => stockChanged++,
   });

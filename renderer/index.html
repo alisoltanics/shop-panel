@@ -59,30 +59,41 @@
           <label>نام فروشگاه <input id="s-shopName" placeholder="مثلاً: گالری رومیزی آرام" /></label>
           <label>هزینه ارسال / پست (تومان) <input id="s-shipping" type="number" min="0" step="1000" placeholder="0 — یعنی رایگان" /></label>
           <label>توضیح کوتاه / شرایط ارسال <textarea id="s-note" rows="2" placeholder="ارسال به سراسر کشور…"></textarea></label>
+          <div class="row">
+            <button class="btn primary" id="btnSaveSettings">ذخیره همه تنظیمات</button>
+          </div>
         </div>
 
         <div class="card">
-          <h2>اتصال ربات</h2>
-          <p class="hint" id="messengerHelp"></p>
-          <label>
-            پیام‌رسان
-            <select id="s-messenger">
-              <option value="telegram">تلگرام (Telegram Bot API)</option>
-              <option value="bale">بله (Bale)</option>
-            </select>
-          </label>
-          <label>توکن ربات <input id="s-botToken" type="password" placeholder="123456:ABC-DEF…" /></label>
-          <label>چت آیدی فروشگاه <input id="s-shopChatId" placeholder="مثلاً 123456789" /></label>
-          <label>
-            یوزرنیم پشتیبانی (دکمه نهایی‌سازی سفارش)
-            <input id="s-support" placeholder="MeadowSupport (بدون @)" />
-          </label>
+          <h2>ربات تلگرام</h2>
+          <p class="hint">
+            ۱) در تلگرام به @BotFather پیام بدهید، /newbot را بزنید و توکن را کپی کنید. ۲) با اکانت فروشگاه ربات را باز
+            کنید، /start و بعد /id بفرستید؛ عددی که می‌دهد «چت آیدی» است. ۳) توکن و چت آیدی را اینجا وارد کنید.
+          </p>
+          <label>توکن ربات تلگرام <input id="tg-token" type="password" placeholder="123456:ABC-DEF…" /></label>
+          <label>چت آیدی فروشگاه (تلگرام) <input id="tg-chat" placeholder="123456789" /></label>
+          <label>یوزرنیم پشتیبانی <input id="tg-support" placeholder="MeadowSupport (بدون @)" /></label>
           <div class="row">
-            <button class="btn primary" id="btnSaveSettings">ذخیره تنظیمات</button>
-            <button class="btn" id="btnBotStart">▶️ روشن کردن ربات</button>
-            <button class="btn danger-ghost" id="btnBotStop">⏹ خاموش کردن</button>
+            <button class="btn" id="tg-start">▶️ روشن کردن تلگرام</button>
+            <button class="btn danger-ghost" id="tg-stop">⏹ خاموش کردن</button>
           </div>
-          <div class="status-line" id="botStatusText">وضعیت: غیرفعال</div>
+          <div class="status-line" id="tg-status">وضعیت: غیرفعال</div>
+        </div>
+
+        <div class="card">
+          <h2>ربات بله (Bale)</h2>
+          <p class="hint">
+            در بله هم با @BotFather ربات بسازید و توکن بگیرید؛ سپس از اکانت فروشگاه /start و /id بفرستید. تنظیمات بله
+            کاملاً مستقل از تلگرام است و هر دو ربات می‌توانند همزمان روشن باشند.
+          </p>
+          <label>توکن ربات بله <input id="bale-token" type="password" placeholder="123456:ABC-DEF…" /></label>
+          <label>چت آیدی فروشگاه (بله) <input id="bale-chat" placeholder="123456789" /></label>
+          <label>یوزرنیم پشتیبانی (بله) <input id="bale-support" placeholder="مثلاً MeadowSupport" /></label>
+          <div class="row">
+            <button class="btn" id="bale-start">▶️ روشن کردن بله</button>
+            <button class="btn danger-ghost" id="bale-stop">⏹ خاموش کردن</button>
+          </div>
+          <div class="status-line" id="bale-status">وضعیت: غیرفعال</div>
         </div>
 
         <div class="card">

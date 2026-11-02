@@ -19,10 +19,20 @@ ipcMain.handle('options:list', (_e, kind) => (kind === 'capacity' ? ['۴ نفر�
 ipcMain.handle('options:add', (_e, kind, value) => (kind === 'capacity' ? ['۴ نفره', value] : ['دایره', value]));
 ipcMain.handle('options:remove', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
 ipcMain.handle('options:rename', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
-ipcMain.handle('settings:get', () => ({ shopName: '', botToken: '', shopChatId: '', note: '' }));
+ipcMain.handle('settings:get', () => ({
+  shopName: '',
+  note: '',
+  shippingPrice: 0,
+  telegram: { token: '', shopChatId: '', supportUsername: 'MeadowSupport' },
+  bale: { token: '', shopChatId: '', supportUsername: '' },
+}));
 ipcMain.handle('app:info', () => ({ version: app.getVersion(), dataDir: '/tmp', platform: process.platform }));
 ipcMain.handle('bot:start', () => ({ running: false, message: 'test' }));
 ipcMain.handle('bot:stop', () => ({ running: false, message: 'test' }));
+ipcMain.handle('bot:statuses', () => ({
+  telegram: { running: false, message: 'test' },
+  bale: { running: false, message: 'test' },
+}));
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
@@ -85,8 +95,9 @@ app.whenReady().then(async () => {
     out.ordersVisible = document.getElementById('panel-orders').classList.contains('active');
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
     out.hasShippingField = !!document.getElementById('s-shipping');
-    out.hasMessengerSelect = document.getElementById('s-messenger').options.length === 2;
-    out.hasSupportField = !!document.getElementById('s-support');
+    out.hasTelegramFields = !!document.getElementById('tg-token') && !!document.getElementById('tg-chat');
+    out.hasBaleFields = !!document.getElementById('bale-token') && !!document.getElementById('bale-chat');
+    out.hasSupportField = !!document.getElementById('tg-support');
     return out;
   })()`);
 
@@ -107,7 +118,8 @@ app.whenReady().then(async () => {
     result.ordersVisible &&
     result.ordersEmptyShown &&
     result.hasShippingField &&
-    result.hasMessengerSelect &&
+    result.hasTelegramFields &&
+    result.hasBaleFields &&
     result.hasSupportField &&
     consoleErrors.length === 0;
 

@@ -5,11 +5,18 @@
 
 ## دانلود
 
+ریپو خصوصی است، پس فایل‌ها را با GitHub CLI بگیرید:
+
+```bash
+gh release download v1.0.1 -R alisoltanics/shop-panel -D ~/Downloads
+sudo dpkg -i ~/Downloads/ShopPanel-1.0.1-linux-amd64.deb   # نصب در منوی اوبونتو
+```
+
 از بخش [Releases](https://github.com/alisoltanics/shop-panel/releases):
 
-- **Ubuntu / Debian**: `ShopPanel-1.0.0-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
-  یا `ShopPanel-1.0.0-linux-x86_64.AppImage` (بدون نصب).
-- **Windows**: `ShopPanel-Setup-1.0.0.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
+- **Ubuntu / Debian**: `ShopPanel-1.0.1-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
+  یا `ShopPanel-1.0.1-x86_64.AppImage` (بدون نصب: `chmod +x` و اجرا).
+- **Windows**: `ShopPanel-Setup-1.0.1.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
 
 ## اجرا از سورس
 

@@ -6,6 +6,7 @@
 const $ = (sel) => document.querySelector(sel);
 
 let products = [];
+let orders = [];
 let categories = [];
 let capacityOptions = [];
 let shapeOptions = [];
@@ -28,10 +29,23 @@ function toast(message, isError = false) {
 }
 
 /* ---------------- تب‌ها ---------------- */
+const PAGE_META = {
+  products: ['محصولات', 'کاتالوگ فروشگاه را مدیریت کنید'],
+  orders: ['سفارش‌ها', 'پیگیری سفارش‌های ثبت‌شده از ربات'],
+  settings: ['تنظیمات و ربات‌ها', 'اتصال تلگرام و بله، دسته‌بندی و گزینه‌ها'],
+};
+
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
     document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === `panel-${tab.dataset.tab}`));
+
+    const meta = PAGE_META[tab.dataset.tab];
+    if (meta) {
+      $('#pageTitle').textContent = meta[0];
+      $('#pageSub').textContent = meta[1];
+    }
+
     if (tab.dataset.tab === 'orders') loadOrders();
   });
 });
@@ -70,6 +84,23 @@ async function loadProducts() {
   products = await api.listProducts();
   renderCategories();
   renderGrid();
+  renderStats();
+}
+
+function renderStats() {
+  const set = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
+
+  const totalStock = products.reduce((sum, p) => sum + effectiveStock(p), 0);
+  const pending = orders.filter((o) => o.status !== 'done').length;
+  const revenue = orders.filter((o) => o.status === 'done').reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+  set('#statProducts', products.length.toLocaleString('fa-IR'));
+  set('#statStock', totalStock.toLocaleString('fa-IR'));
+  set('#statPending', pending.toLocaleString('fa-IR'));
+  set('#statRevenue', revenue.toLocaleString('fa-IR'));
 }
 
 async function loadCategories() {
@@ -169,7 +200,10 @@ function renderGrid() {
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
     if (p.images?.[0]) thumb.style.backgroundImage = `url("${imgUrl(p.images[0])}")`;
-    else thumb.textContent = '🖼️';
+    else {
+      thumb.classList.add('no-image');
+      thumb.textContent = '🖼️';
+    }
 
     const body = document.createElement('div');
     body.className = 'p-body';
@@ -793,7 +827,9 @@ function renderOrders(orders) {
 
 async function loadOrders() {
   try {
-    renderOrders(await api.listOrders());
+    orders = await api.listOrders();
+    renderOrders(orders);
+    renderStats();
   } catch (err) {
     toast(err.message || 'خطا در دریافت سفارش‌ها', true);
   }
@@ -818,5 +854,6 @@ $('#btnOpenData').onclick = () => api.openDataDir();
   try {
     const info = await api.getAppInfo();
     $('#appVersion').textContent = info.version;
+    $('#sideVersion').textContent = `نسخه ${info.version}`;
   } catch {}
 })();

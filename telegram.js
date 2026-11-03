@@ -72,9 +72,14 @@ class TelegramClient {
     if (options.parse_mode) form.append('parse_mode', options.parse_mode);
     if (options.reply_markup) form.append('reply_markup', JSON.stringify(options.reply_markup));
 
-    const buffer = fs.readFileSync(filePath);
-    const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
-    form.append(field, new Blob([buffer], { type }), path.basename(filePath));
+    if (options.fileId) {
+      // فایل قبلاً یک‌بار آپلود شده؛ تلگرام با شناسه کش‌شده ارسال می‌کند
+      form.append(field, String(options.fileId));
+    } else {
+      const buffer = fs.readFileSync(filePath);
+      const type = MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+      form.append(field, new Blob([buffer], { type }), path.basename(filePath));
+    }
 
     const res = await fetch(`${this.base}/${method}`, { method: 'POST', body: form });
     const data = await res.json().catch(() => ({}));
@@ -88,6 +93,42 @@ class TelegramClient {
 
   sendVideo(chatId, filePath, options = {}) {
     return this.sendFile('sendVideo', 'video', chatId, filePath, options);
+  }
+
+  /** آلبوم عکس: items = [{ filePath, fileId?, caption? }] */
+  async sendMediaGroup(chatId, items, options = {}) {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    if (options.reply_markup) form.append('reply_markup', JSON.stringify(options.reply_markup));
+
+    const media = [];
+    items.forEach((item, index) => {
+      const entry = { type: 'photo' };
+
+      if (item.fileId) {
+        entry.media = String(item.fileId);
+      } else {
+        const key = `photo${index}`;
+        const buffer = fs.readFileSync(item.filePath);
+        const type = MIME[path.extname(item.filePath).toLowerCase()] || 'image/jpeg';
+        form.append(key, new Blob([buffer], { type }), path.basename(item.filePath));
+        entry.media = `attach://${key}`;
+      }
+
+      if (item.caption) {
+        entry.caption = item.caption;
+        entry.parse_mode = options.parse_mode || 'HTML';
+      }
+
+      media.push(entry);
+    });
+
+    form.append('media', JSON.stringify(media));
+
+    const res = await fetch(`${this.base}/sendMediaGroup`, { method: 'POST', body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!data.ok) throw new Error(data.description || `خطای ارسال آلبوم (${res.status})`);
+    return data.result;
   }
 
   start() {

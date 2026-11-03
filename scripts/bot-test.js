@@ -17,6 +17,7 @@ class FakeClient {
     this.handlers = {};
     this.sent = [];
     this.photos = [];
+    this.albums = [];
     this.answers = [];
     this.failFor = null;
     instances.push(this);
@@ -50,7 +51,11 @@ class FakeClient {
   }
   async sendPhoto(chatId, file, options = {}) {
     this.photos.push({ chatId, file, options });
-    return {};
+    return { photo: [{ file_id: `cached-photo-${this.photos.length}` }] };
+  }
+  async sendMediaGroup(chatId, items, options = {}) {
+    this.albums.push({ chatId, items, options });
+    return items.map((item, index) => ({ photo: [{ file_id: item.fileId || `cached-${index}` }] }));
   }
   async sendVideo() {
     return {};
@@ -209,8 +214,8 @@ function check(label, condition, extra = '') {
   const sizeButton = sizeChoices?.options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text || '';
   check('size button hides stock', !sizeButton.includes('عدد'), sizeButton);
   check(
-    'size button shows compact capacity, shape and color',
-    sizeButton.includes('۴ نفره') && sizeButton.includes('دایره') && sizeButton.includes('کرم'),
+    'size button shows full label without truncation',
+    sizeButton.includes('۴ نفره') && sizeButton.includes('دایره') && sizeButton.includes('کرم') && !sizeButton.includes('…'),
     sizeButton
   );
   await cb(`s:${sizeProduct.id}:0`);
@@ -219,7 +224,7 @@ function check(label, condition, extra = '') {
   const blocked = fake.sent[fake.sent.length - 1];
   check('size stock limit enforced', blocked.text.includes('موجودی این بُعد تمام شده'), blocked.text);
 
-  // عکس اصلی + دکمه «عکس‌های بیشتر»
+  // آلبوم + کش file_id
   fs.writeFileSync(path.join(os.tmpdir(), 'img-1.jpg'), 'x');
   fs.writeFileSync(path.join(os.tmpdir(), 'img-2.jpg'), 'x');
   const gallery = store.saveProduct({
@@ -228,19 +233,28 @@ function check(label, condition, extra = '') {
     stock: 1,
     images: ['img-1.jpg', 'img-2.jpg'],
   });
-  const photosFor = (chat) => fake.photos.filter((p) => String(p.chatId) === chat).length;
-  const beforePhotos = photosFor('42');
+
   await cb(`p:${gallery.id}`);
-  check('only main image sent first', photosFor('42') - beforePhotos === 1, String(photosFor('42') - beforePhotos));
+  const album = fake.albums[fake.albums.length - 1];
+  check('photos sent as one album', !!album && album.items.length === 2, JSON.stringify(album?.items?.length));
+  check('album carries the product keyboard', !!album?.options?.reply_markup);
+  check(
+    'file ids cached after first send',
+    store.getMediaId('telegram', 'img-1.jpg') === 'cached-0',
+    store.getMediaId('telegram', 'img-1.jpg')
+  );
 
-  const galleryPhoto = [...fake.photos].reverse().find((p) => String(p.chatId) === '42');
-  const moreButton = (galleryPhoto?.options?.reply_markup?.inline_keyboard || [])
-    .flat()
-    .find((b) => String(b.callback_data).startsWith('more:'));
-  check('more photos button present', !!moreButton);
-
-  await cb(`more:${gallery.id}`);
-  check('more photos sent on demand', photosFor('42') - beforePhotos === 2, String(photosFor('42') - beforePhotos));
+  await cb(`p:${gallery.id}`);
+  const cachedAlbum = fake.albums[fake.albums.length - 1];
+  check(
+    'second send reuses cached file ids',
+    cachedAlbum.items.every((item) => String(item.fileId).startsWith('cached-')),
+    JSON.stringify(cachedAlbum.items.map((item) => item.fileId))
+  );
+  check(
+    'no more button for small albums',
+    !JSON.stringify(cachedAlbum.options.reply_markup).includes('more:')
+  );
 
   const directOrder = store.createOrder({    chatId: '7',
     customer: store.getCustomer(42),

@@ -224,10 +224,10 @@ async function startBot({
     const product = store.getProduct(id);
     if (!product) return bot.sendMessage(chatId, 'محصول پیدا نشد.');
 
-    const imageFiles = (product.images || [])
-      .map((name) => path.join(imagesDir, name))
-      .filter((file) => fs.existsSync(file))
-      .slice(0, 10);
+    const images = (product.images || [])
+      .map((name) => ({ name, filePath: path.join(imagesDir, name) }))
+      .filter((item) => fs.existsSync(item.filePath))
+      .map((item) => ({ ...item, fileId: store.getMediaId(messenger, item.name) }));
 
     const hasChoices = sizesOf(product).length > 0 || attributesOf(product).length > 0;
     const rows = [
@@ -239,9 +239,9 @@ async function startBot({
       ],
     ];
 
-    if (imageFiles.length > 1) {
+    if (images.length > 10) {
       rows.push([
-        { text: `🖼 دیدن عکس‌های بیشتر (${imageFiles.length - 1})`, callback_data: `more:${product.id}` },
+        { text: `🖼 دیدن عکس‌های بیشتر (${images.length - 10})`, callback_data: `more:${product.id}` },
       ]);
     }
 
@@ -252,18 +252,48 @@ async function startBot({
       const videoFile = path.join(videosDir, product.video);
       if (fs.existsSync(videoFile)) {
         try {
-          await bot.sendVideo(chatId, videoFile);
+          const result = await bot.sendVideo(chatId, videoFile, {
+            fileId: store.getMediaId(messenger, product.video),
+          });
+          const fileId = result?.video?.file_id;
+          if (fileId) store.setMediaId(messenger, product.video, fileId);
         } catch {}
       }
     }
 
-    if (imageFiles.length) {
+    // آلبوم: همه عکس‌ها با یک درخواست؛ در ارسال‌های بعدی از file_id کش‌شده استفاده می‌شود
+    if (images.length > 1) {
       try {
-        return await bot.sendPhoto(chatId, imageFiles[0], {
+        const album = images.slice(0, 10).map((item, index) => ({
+          ...item,
+          caption: index === 0 ? productCaption(product) : '',
+        }));
+        const sent = await bot.sendMediaGroup(chatId, album, {
+          reply_markup: keyboard,
+          parse_mode: 'HTML',
+        });
+
+        (sent || []).forEach((message, index) => {
+          const fileId = message?.photo?.at(-1)?.file_id;
+          if (fileId && images[index]) store.setMediaId(messenger, images[index].name, fileId);
+        });
+        return;
+      } catch {
+        // اگر پیام‌رسان آلبوم را پشتیبانی نکند، با ارسال تکی ادامه می‌دهیم
+      }
+    }
+
+    if (images.length) {
+      try {
+        const result = await bot.sendPhoto(chatId, images[0].filePath, {
+          fileId: images[0].fileId,
           caption: productCaption(product),
           parse_mode: 'HTML',
           reply_markup: keyboard,
         });
+        const fileId = result?.photo?.at(-1)?.file_id;
+        if (fileId) store.setMediaId(messenger, images[0].name, fileId);
+        return;
       } catch {}
     }
 
@@ -737,13 +767,18 @@ async function startBot({
       if (action === 'more') {
         await bot.answerCallbackQuery(q.id);
         const product = store.getProduct(arg1);
-        const photos = (product?.images || [])
-          .map((name) => path.join(imagesDir, name))
-          .filter((file) => fs.existsSync(file))
-          .slice(1, 10);
-        for (const file of photos) {
+        const rest = (product?.images || [])
+          .map((name) => ({ name, filePath: path.join(imagesDir, name) }))
+          .filter((item) => fs.existsSync(item.filePath))
+          .slice(10);
+
+        for (const item of rest) {
           try {
-            await bot.sendPhoto(chatId, file);
+            const result = await bot.sendPhoto(chatId, item.filePath, {
+              fileId: store.getMediaId(messenger, item.name),
+            });
+            const fileId = result?.photo?.at(-1)?.file_id;
+            if (fileId) store.setMediaId(messenger, item.name, fileId);
           } catch {}
         }
         return;

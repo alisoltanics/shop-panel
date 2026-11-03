@@ -18,6 +18,7 @@ class Store {
       orders: [],
       outbox: [],
       views: [],
+      mediaCache: {},
       nextId: 1,
       nextOrderId: 0,
       nextOutboxId: 0,
@@ -41,6 +42,7 @@ class Store {
         orders: Array.isArray(raw.orders) ? raw.orders : [],
         outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
         views: Array.isArray(raw.views) ? raw.views : [],
+        mediaCache: raw.mediaCache && typeof raw.mediaCache === 'object' ? raw.mediaCache : {},
         nextId: Number(raw.nextId) || 1,
         nextOrderId: Number(raw.nextOrderId) || 0,
         nextOutboxId: Number(raw.nextOutboxId) || 0,
@@ -431,6 +433,20 @@ class Store {
 
   listViews() {
     return [...this.data.views].sort((a, b) => b.at - a.at);
+  }
+
+  /* ---------- کش فایل‌های تلگرام (file_id) ---------- */
+
+  getMediaId(messenger, name) {
+    return this.data.mediaCache[`${messenger}:${name}`] || '';
+  }
+
+  setMediaId(messenger, name, fileId) {
+    if (!fileId) return;
+    const key = `${messenger}:${name}`;
+    if (this.data.mediaCache[key] === fileId) return;
+    this.data.mediaCache[key] = String(fileId);
+    this.save();
   }
 
   listOrders() {

@@ -1,6 +1,6 @@
 {
   "name": "shop-panel",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "پنل مدیریت محصولات فروشگاه + ربات تلگرام سفارش‌گیری",
   "main": "main.js",
   "author": {

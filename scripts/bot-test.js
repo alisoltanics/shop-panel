@@ -218,6 +218,15 @@ function check(label, condition, extra = '') {
     sizeButton.includes('۴ نفره') && sizeButton.includes('دایره') && sizeButton.includes('کرم') && !sizeButton.includes('…'),
     sizeButton
   );
+
+  const sizeKeyboard = sizeChoices?.options?.reply_markup?.inline_keyboard || [];
+  const cancelButton = sizeKeyboard.flat().find((b) => String(b.callback_data) === 'pg:0');
+  check(
+    'size message lists full option details',
+    sizeChoices.text.includes('۱۲۰×۱۸۰') && sizeChoices.text.includes('کرم'),
+    sizeChoices.text
+  );
+  check('cancel button says cancel purchase', cancelButton?.text === '✕ انصراف از خرید محصول', cancelButton?.text);
   await cb(`s:${sizeProduct.id}:0`);
   await cb(`pick:${sizeProduct.id}`);
   await cb(`s:${sizeProduct.id}:0`);

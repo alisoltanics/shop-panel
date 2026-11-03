@@ -400,7 +400,7 @@ async function startBot({
     const rows = attr.options.map((option, index) => [
       { text: option, callback_data: `o:${product.id}:${picker.attrIndex}:${index}` },
     ]);
-    rows.push([{ text: '✕ انصراف', callback_data: 'pg:0' }]);
+    rows.push([{ text: '✕ انصراف از خرید محصول', callback_data: 'pg:0' }]);
 
     return bot.sendMessage(chatId, `⚙️ <b>${esc(attr.name)}</b> را انتخاب کنید:`, {
       parse_mode: 'HTML',
@@ -426,20 +426,34 @@ async function startBot({
     }
 
     if (sizes.length) {
+      // دکمه‌ها شماره‌دار و کوتاه‌اند و متن کامل هر گزینه در خود پیام می‌آید تا چیزی جا نیفتد
       const rows = sizes.map((size, index) => {
-        const label = [size.capacity, size.shape, size.color, size.label].filter(Boolean).join(' • ') || 'گزینه';
+        const short = [size.capacity, size.shape, size.color].filter(Boolean).join(' / ');
         return [
           {
-            text: label,
+            text: `${index + 1}) ${short || size.label || 'گزینه'}`,
             callback_data: `s:${product.id}:${index}`,
           },
         ];
       });
-      rows.push([{ text: '✕ انصراف', callback_data: 'pg:0' }]);
-      return bot.sendMessage(chatId, `📏 <b>${esc(product.name)}</b>\nبُعد را انتخاب کنید:`, {
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: rows },
-      });
+      rows.push([{ text: '✕ انصراف از خرید محصول', callback_data: 'pg:0' }]);
+
+      const list = sizes
+        .map((size, index) => {
+          const full = [size.capacity, size.shape, size.color, size.label].filter(Boolean).join(' / ') || 'گزینه';
+          const price = Number(size.price) > 0 ? size.price : product.price;
+          return `${index + 1}) ${esc(full)} — ${money(price)}`;
+        })
+        .join('\n');
+
+      return bot.sendMessage(
+        chatId,
+        `📏 <b>${esc(product.name)}</b>\nلطفاً گزینه مورد نظر را انتخاب کنید:\n\n${list}`,
+        {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: rows },
+        }
+      );
     }
 
     return sendAttributeStep(chatId);

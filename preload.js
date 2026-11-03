@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   addCategory: (name) => ipcRenderer.invoke('categories:add', name),
   removeCategory: (name) => ipcRenderer.invoke('categories:remove', name),
   listOrders: () => ipcRenderer.invoke('orders:list'),
+  cancelOrder: (id) => ipcRenderer.invoke('orders:cancel', id),
   listOptions: (kind) => ipcRenderer.invoke('options:list', kind),
   addOption: (kind, value) => ipcRenderer.invoke('options:add', kind, value),
   removeOption: (kind, value) => ipcRenderer.invoke('options:remove', kind, value),

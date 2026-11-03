@@ -264,6 +264,7 @@ function registerIpc() {
   ipcMain.handle('categories:remove', (_e, name) => store.removeCategory(name));
 
   ipcMain.handle('orders:list', () => store.listOrders());
+  ipcMain.handle('orders:cancel', (_e, id) => store.cancelOrder(id));
 
   ipcMain.handle('options:list', (_e, kind) => store.listOptions(kind));
   ipcMain.handle('options:add', (_e, kind, value) => store.addOption(kind, value));

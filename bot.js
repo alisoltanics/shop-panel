@@ -75,25 +75,19 @@ function productCaption(product) {
   if (product.category) lines.push(`📦 دسته: ${esc(product.category)}`);
   if (product.material) lines.push(`🧵 جنس: ${esc(product.material)}`);
   if (product.colors?.length) lines.push(`🎨 رنگ‌ها: ${esc(product.colors.join('، '))}`);
-  if (sizes.length) {
-    const rows = sizes.map((s) => [s.label, s.capacity, s.shape].filter(Boolean).join(' / '));
-    lines.push(`📏 ابعاد: ${esc(rows.join(' | '))}`);
-  }
-  attributesOf(product).forEach((attr) => lines.push(`⚙️ ${esc(attr.name)}: ${esc(attr.options.join(' | '))}`));
-  const sized = sizes.filter((s) => s.stock !== null && s.stock !== undefined);
-  const totalStock = sized.length
-    ? sized.reduce((sum, s) => sum + Number(s.stock || 0), 0)
-    : Number(product.stock) || 0;
-  lines.push(`📦 موجودی: ${totalStock}`);
   if (product.description) lines.push('', esc(product.description));
 
-  const prices = [
-    Number(product.price) || 0,
-    ...sizes.map((s) => Number(s.price) || 0),
-    ...Object.values(product.variantPrices || {}).map((v) => Number(v) || 0),
-  ].filter((p) => p > 0);
-  const perSize = sizes.some((s) => Number(s.price) > 0);
-  lines.push('', `💰 <b>${money(prices.length ? Math.min(...prices) : 0)}</b>${perSize ? ' (بسته به بُعد)' : ''}`);
+  // همه قیمت‌ها به تفکیک گزینه نمایش داده می‌شوند و موجودی به مشتری نشان داده نمی‌شود
+  if (sizes.length) {
+    lines.push('', '<b>قیمت‌ها:</b>');
+    sizes.forEach((size) => {
+      const label = [size.capacity, size.shape, size.color, size.label].filter(Boolean).join(' / ') || 'گزینه';
+      lines.push(`• ${esc(label)}: ${money(Number(size.price) > 0 ? size.price : product.price)}`);
+    });
+  } else {
+    lines.push('', `💰 <b>${money(product.price)}</b>`);
+  }
+
   return lines.join('\n');
 }
 
@@ -152,7 +146,8 @@ async function startBot({
           (s) =>
             s.label === (item.size || '') &&
             (s.capacity || '') === (item.capacity || '') &&
-            (s.shape || '') === (item.shape || '')
+            (s.shape || '') === (item.shape || '') &&
+            (s.color || '') === (item.color || '')
         ) || null;
 
       items.push({
@@ -161,6 +156,7 @@ async function startBot({
         size: item.size || '',
         capacity: item.capacity || '',
         shape: item.shape || '',
+        color: item.color || '',
         sizeRow,
         options: item.options || [],
         indices: item.indices || [],
@@ -249,16 +245,35 @@ async function startBot({
       }
     }
 
-    const photo = product.images?.[0] ? path.join(imagesDir, product.images[0]) : null;
-    if (photo && fs.existsSync(photo)) {
+    const photos = (product.images || [])
+      .map((name) => path.join(imagesDir, name))
+      .filter((file) => fs.existsSync(file))
+      .slice(0, 10);
+
+    if (photos.length) {
+      let sentMain = false;
       try {
-        return await bot.sendPhoto(chatId, photo, {
+        await bot.sendPhoto(chatId, photos[0], {
           caption: productCaption(product),
           parse_mode: 'HTML',
           reply_markup: keyboard,
         });
+        sentMain = true;
       } catch {}
+
+      if (!sentMain) {
+        await bot.sendMessage(chatId, productCaption(product), { parse_mode: 'HTML', reply_markup: keyboard });
+      }
+
+      // بقیه عکس‌های محصول هم برای مشتری ارسال می‌شوند
+      for (const file of photos.slice(1)) {
+        try {
+          await bot.sendPhoto(chatId, file);
+        } catch {}
+      }
+      return;
     }
+
     return bot.sendMessage(chatId, productCaption(product), { parse_mode: 'HTML', reply_markup: keyboard });
   }
 
@@ -298,6 +313,7 @@ async function startBot({
     if (item.size) parts.push(`بُعد: ${item.size}`);
     if (item.capacity) parts.push(item.capacity);
     if (item.shape) parts.push(item.shape);
+    if (item.color) parts.push(item.color);
     if (item.options?.length) parts.push(`گزینه‌ها: ${item.options.join(' / ')}`);
     if (item.dims) parts.push(`ابعاد: ${item.dims}`);
     return `${index + 1}) ${esc(parts.join(' — '))} × ${item.qty} = ${money(item.unitPrice * item.qty)}`;
@@ -308,8 +324,9 @@ async function startBot({
     const size = sizeRow?.label || '';
     const capacity = sizeRow?.capacity || '';
     const shape = sizeRow?.shape || '';
+    const color = sizeRow?.color || '';
     const cart = cartOf(chatId);
-    const key = `${product.id}|${size}|${capacity}|${shape}|${(indices || []).join('-')}`;
+    const key = `${product.id}|${size}|${capacity}|${shape}|${color}|${(indices || []).join('-')}`;
     const entry = cart.get(key);
 
     if (sizeRow && sizeRow.stock !== null && sizeRow.stock !== undefined && sizeRow.stock <= (entry?.qty || 0)) {
@@ -327,6 +344,7 @@ async function startBot({
       size,
       capacity,
       shape,
+      color,
       indices: indices || [],
       options: labels || [],
       variantKey: variant.key,
@@ -385,12 +403,10 @@ async function startBot({
 
     if (sizes.length) {
       const rows = sizes.map((size, index) => {
-        const stock = size.stock === null || size.stock === undefined ? null : Number(size.stock);
-        const suffix = stock === null ? '' : stock > 0 ? ` (${stock} عدد)` : ' (ناموجود)';
-        const title = [size.label, size.capacity, size.shape].filter(Boolean).join(' / ');
+        const label = [size.capacity, size.shape, size.color, size.label].filter(Boolean).join(' • ') || 'گزینه';
         return [
           {
-            text: `${title} — ${money(Number(size.price) > 0 ? size.price : product.price)}${suffix}`,
+            text: label.length > 34 ? `${label.slice(0, 33)}…` : label,
             callback_data: `s:${product.id}:${index}`,
           },
         ];
@@ -422,7 +438,7 @@ async function startBot({
         (i, n) =>
           `${n + 1}) ${esc(i.name)}${i.size ? ` — بُعد: ${esc(i.size)}` : ''}${
             i.capacity ? ` — تعداد: ${esc(i.capacity)}` : ''
-          }${i.shape ? ` — شکل: ${esc(i.shape)}` : ''}${
+          }${i.shape ? ` — شکل: ${esc(i.shape)}` : ''}${i.color ? ` — رنگ: ${esc(i.color)}` : ''}${
             i.options?.length ? ` — گزینه‌ها: ${esc(i.options.join(' / '))}` : ''
           }${i.dims ? ` — ابعاد: ${esc(i.dims)}` : ''} × ${i.qty} = ${money(i.unitPrice * i.qty)}`
       ),
@@ -462,7 +478,9 @@ async function startBot({
       const file = path.join(imagesDir, image);
       if (!fs.existsSync(file)) continue;
       try {
-        const extra = [item.size, item.capacity, item.shape, ...(item.options || [])].filter(Boolean).join(' / ');
+        const extra = [item.size, item.capacity, item.shape, item.color, ...(item.options || [])]
+          .filter(Boolean)
+          .join(' / ');
         await bot.sendPhoto(shopTarget(), file, { caption: `${item.name}${extra ? ` — ${extra}` : ''} × ${item.qty}` });
       } catch {}
     }
@@ -549,6 +567,7 @@ async function startBot({
         size: i.size || null,
         capacity: i.capacity || '',
         shape: i.shape || '',
+        color: i.color || '',
         options: i.options || [],
         variantKey: i.variantKey || '',
         dims: i.dims || '',

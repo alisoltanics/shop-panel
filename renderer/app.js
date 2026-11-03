@@ -10,6 +10,7 @@ let orders = [];
 let categories = [];
 let capacityOptions = [];
 let shapeOptions = [];
+let colorOptions = [];
 let currentImages = [];
 let currentVideo = '';
 let currentSizes = [];
@@ -95,7 +96,7 @@ function renderStats() {
   };
 
   const totalStock = products.reduce((sum, p) => sum + effectiveStock(p), 0);
-  const pending = orders.filter((o) => o.status !== 'done').length;
+  const pending = orders.filter((o) => o.status === 'pending').length;
   const revenue = orders.filter((o) => o.status === 'done').reduce((sum, o) => sum + Number(o.total || 0), 0);
 
   set('#statProducts', products.length.toLocaleString('fa-IR'));
@@ -110,7 +111,11 @@ async function loadCategories() {
 }
 
 async function loadOptions() {
-  [capacityOptions, shapeOptions] = await Promise.all([api.listOptions('capacity'), api.listOptions('shape')]);
+  [capacityOptions, shapeOptions, colorOptions] = await Promise.all([
+    api.listOptions('capacity'),
+    api.listOptions('shape'),
+    api.listOptions('color'),
+  ]);
   renderOptions();
 }
 
@@ -276,6 +281,13 @@ $('#search').addEventListener('input', renderGrid);
 $('#filterCat').addEventListener('change', renderGrid);
 
 /* ---------------- مودال محصول ---------------- */
+function updatePriceStockVisibility() {
+  // برای دسته «رومیزی» قیمت و موجودی فقط در ردیف‌های ابعاد ثبت می‌شود
+  const hide = String($('#f-category').value || '').includes('رومیزی');
+  $('#priceField').classList.toggle('hidden', hide);
+  $('#stockField').classList.toggle('hidden', hide);
+}
+
 function fillCategorySelect(selected = '') {
   const select = $('#f-category');
   const names = [...new Set([...categories, ...(selected ? [selected] : [])])];
@@ -289,6 +301,8 @@ function fillCategorySelect(selected = '') {
   select.value = selected || '';
 }
 
+$('#f-category').addEventListener('change', updatePriceStockVisibility);
+
 function openModal(product = null) {
   editingId = product?.id ?? null;
   currentImages = product ? [...(product.images || [])] : [];
@@ -298,6 +312,7 @@ function openModal(product = null) {
         label: s.label,
         capacity: s.capacity || '',
         shape: s.shape || '',
+        color: s.color || '',
         price: s.price ?? null,
         stock: s.stock ?? null,
       }))
@@ -306,6 +321,7 @@ function openModal(product = null) {
   $('#modalTitle').textContent = product ? 'ویرایش محصول' : 'محصول جدید';
   $('#f-name').value = product?.name || '';
   fillCategorySelect(product?.category || '');
+  updatePriceStockVisibility();
   $('#f-price').value = product?.price ?? '';
   $('#f-stock').value = product?.stock ?? 0;
   $('#f-material').value = product?.material || '';
@@ -413,25 +429,33 @@ function fillOptionSelect(select, list, selected) {
   select.value = selected || '';
 }
 
+const OPTION_META = {
+  capacity: { title: 'گزینه جدید تعداد نفرات', placeholder: 'مثلاً ۴ نفره' },
+  shape: { title: 'گزینه جدید شکل', placeholder: 'مثلاً دایره' },
+  color: { title: 'گزینه جدید رنگ', placeholder: 'مثلاً کرم' },
+};
+
+function setOptionList(kind, list) {
+  if (kind === 'capacity') capacityOptions = list;
+  else if (kind === 'shape') shapeOptions = list;
+  else colorOptions = list;
+}
+
 async function handleOptionSelect(select, kind, index) {
   if (select.value !== '__new__') {
     currentSizes[index][kind] = select.value;
     return;
   }
 
-  const title = kind === 'capacity' ? 'گزینه جدید تعداد نفرات' : 'گزینه جدید شکل';
-  const placeholder = kind === 'capacity' ? 'مثلاً ۴ نفره' : 'مثلاً دایره';
-  const value = await askText(title, placeholder);
+  const meta = OPTION_META[kind];
+  const value = await askText(meta.title, meta.placeholder);
 
   if (!value) {
     select.value = currentSizes[index][kind] || '';
     return;
   }
 
-  const list = await api.addOption(kind, value);
-  if (kind === 'capacity') capacityOptions = list;
-  else shapeOptions = list;
-
+  setOptionList(kind, await api.addOption(kind, value));
   currentSizes[index][kind] = value;
   renderOptions();
   renderSizes();
@@ -443,7 +467,7 @@ function renderSizes() {
 
   const head = document.createElement('div');
   head.className = 'size-row size-head';
-  ['ابعاد / اندازه', 'تعداد نفرات', 'شکل', 'قیمت (تومان)', 'موجودی', ''].forEach((text) => {
+  ['ابعاد / اندازه', 'تعداد نفرات', 'شکل', 'رنگ', 'قیمت (تومان)', 'موجودی', ''].forEach((text) => {
     const span = document.createElement('span');
     span.textContent = text;
     head.appendChild(span);
@@ -477,6 +501,10 @@ function renderSizes() {
     fillOptionSelect(shape, shapeOptions, size.shape);
     shape.onchange = () => handleOptionSelect(shape, 'shape', index);
 
+    const color = document.createElement('select');
+    fillOptionSelect(color, colorOptions, size.color);
+    color.onchange = () => handleOptionSelect(color, 'color', index);
+
     const price = document.createElement('input');
     price.type = 'number';
     price.min = '0';
@@ -506,19 +534,19 @@ function renderSizes() {
       renderSizes();
     };
 
-    row.append(label, capacity, shape, price, stock, remove);
+    row.append(label, capacity, shape, color, price, stock, remove);
     wrap.appendChild(row);
   });
 }
 
 $('#btnAddSize').onclick = () => {
-  currentSizes.push({ label: '', capacity: '', shape: '', price: null, stock: null });
+  currentSizes.push({ label: '', capacity: '', shape: '', color: '', price: null, stock: null });
   renderSizes();
 };
 
 /* ---------------- گزینه‌های تعداد نفرات و شکل (تنظیمات) ---------------- */
 function renderOptionChips(kind, list) {
-  const wrap = kind === 'capacity' ? $('#capacityList') : $('#shapeList');
+  const wrap = $(`#${kind}List`);
   wrap.innerHTML = '';
 
   if (!list.length) {
@@ -543,9 +571,7 @@ function renderOptionChips(kind, list) {
     edit.onclick = async () => {
       const next = await askText('ویرایش گزینه', '', value);
       if (!next || next === value) return;
-      const updated = await api.renameOption(kind, value, next);
-      if (kind === 'capacity') capacityOptions = updated;
-      else shapeOptions = updated;
+      setOptionList(kind, await api.renameOption(kind, value, next));
       renderOptions();
       if (!$('#modal').classList.contains('hidden')) renderSizes();
       toast('گزینه ویرایش شد');
@@ -557,9 +583,7 @@ function renderOptionChips(kind, list) {
     remove.title = 'حذف گزینه';
     remove.onclick = async () => {
       if (!confirm(`گزینه «${value}» حذف شود؟`)) return;
-      const updated = await api.removeOption(kind, value);
-      if (kind === 'capacity') capacityOptions = updated;
-      else shapeOptions = updated;
+      setOptionList(kind, await api.removeOption(kind, value));
       renderOptions();
       toast('گزینه حذف شد');
     };
@@ -572,29 +596,29 @@ function renderOptionChips(kind, list) {
 function renderOptions() {
   renderOptionChips('capacity', capacityOptions);
   renderOptionChips('shape', shapeOptions);
+  renderOptionChips('color', colorOptions);
 }
 
 async function addOptionFromSettings(kind) {
-  const input = kind === 'capacity' ? $('#newCapacity') : $('#newShape');
+  const inputId = { capacity: '#newCapacity', shape: '#newShape', color: '#newColor' }[kind];
+  const input = $(inputId);
   const value = input.value.trim();
   if (!value) return toast('مقدار را وارد کنید', true);
 
-  const list = await api.addOption(kind, value);
-  if (kind === 'capacity') capacityOptions = list;
-  else shapeOptions = list;
-
+  setOptionList(kind, await api.addOption(kind, value));
   input.value = '';
   renderOptions();
   toast('گزینه اضافه شد');
 }
 
-$('#btnAddCapacity').onclick = () => addOptionFromSettings('capacity');
-$('#btnAddShape').onclick = () => addOptionFromSettings('shape');
-$('#newCapacity').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('#btnAddCapacity').click();
-});
-$('#newShape').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('#btnAddShape').click();
+const OPTION_BUTTONS = { capacity: '#btnAddCapacity', shape: '#btnAddShape', color: '#btnAddColor' };
+const OPTION_INPUTS = { capacity: '#newCapacity', shape: '#newShape', color: '#newColor' };
+
+Object.keys(OPTION_BUTTONS).forEach((kind) => {
+  $(OPTION_BUTTONS[kind]).onclick = () => addOptionFromSettings(kind);
+  $(OPTION_INPUTS[kind]).addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') addOptionFromSettings(kind);
+  });
 });
 
 /* ---------------- تصاویر و ویدیو ---------------- */
@@ -621,6 +645,7 @@ $('#btnNewCat').onclick = async () => {
   try {
     categories = await api.addCategory(name);
     fillCategorySelect(name);
+    updatePriceStockVisibility();
     renderCategories();
     renderGrid();
     toast('دسته اضافه شد');
@@ -795,9 +820,15 @@ function renderOrders(orders) {
     const code = document.createElement('div');
     code.className = 'order-code';
     code.textContent = `سفارش #${order.code}`;
+    const statusMap = {
+      done: ['ok', 'نهایی شده'],
+      canceled: ['canceled', 'لغو شده'],
+      pending: ['pending', 'در انتظار'],
+    };
+    const [badgeClass, badgeText] = statusMap[order.status] || statusMap.pending;
     const badge = document.createElement('span');
-    badge.className = `badge ${order.status === 'done' ? 'ok' : 'pending'}`;
-    badge.textContent = order.status === 'done' ? 'نهایی شده' : 'در انتظار';
+    badge.className = `badge ${badgeClass}`;
+    badge.textContent = badgeText;
     head.append(code, badge);
 
     const meta = document.createElement('div');
@@ -822,6 +853,24 @@ function renderOrders(orders) {
     total.textContent = `🚚 ارسال: ${order.shipping > 0 ? money(order.shipping) : 'رایگان'} | 💰 جمع کل: ${money(order.total)}`;
 
     card.append(head, meta, addr, list, total);
+
+    if (order.status === 'pending') {
+      const actions = document.createElement('div');
+      actions.className = 'order-actions';
+      const cancel = document.createElement('button');
+      cancel.className = 'btn small danger-ghost';
+      cancel.textContent = 'لغو سفارش';
+      cancel.onclick = async () => {
+        if (!confirm(`سفارش #${order.code} لغو شود؟`)) return;
+        const updated = await api.cancelOrder(order.id);
+        if (!updated) return toast('امکان لغو این سفارش نیست', true);
+        toast('سفارش لغو شد');
+        await loadOrders();
+      };
+      actions.appendChild(cancel);
+      card.appendChild(actions);
+    }
+
     wrap.appendChild(card);
   });
 }

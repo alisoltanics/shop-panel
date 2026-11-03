@@ -193,21 +193,44 @@ function check(label, condition, extra = '') {
     name: 'رومیزی ساده',
     price: 500000,
     stock: 5,
-    sizes: [{ label: '۱۲۰×۱۸۰', capacity: '۴ نفره', shape: 'دایره', price: null, stock: 1 }],
+    sizes: [{ label: '۱۲۰×۱۸۰', capacity: '۴ نفره', shape: 'دایره', color: 'کرم', price: null, stock: 1 }],
   });
+
+  await cb(`p:${sizeProduct.id}`);
+  const sizeCaption = fake.sent[fake.sent.length - 1]?.text || '';
+  check('caption lists prices', sizeCaption.includes('قیمت‌ها:'), sizeCaption);
+  check('caption hides stock from customer', !sizeCaption.includes('موجودی:'), sizeCaption);
+
   await cb(`pick:${sizeProduct.id}`);
   const sizeChoices = fake.sent[fake.sent.length - 1];
   const sizeButton = sizeChoices?.options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text || '';
-  check('size button shows stock', sizeButton.includes('(1 عدد)'), sizeButton);
-  check('size button shows capacity and shape', sizeButton.includes('۴ نفره') && sizeButton.includes('دایره'), sizeButton);
+  check('size button hides stock', !sizeButton.includes('عدد'), sizeButton);
+  check(
+    'size button shows compact capacity, shape and color',
+    sizeButton.includes('۴ نفره') && sizeButton.includes('دایره') && sizeButton.includes('کرم'),
+    sizeButton
+  );
   await cb(`s:${sizeProduct.id}:0`);
   await cb(`pick:${sizeProduct.id}`);
   await cb(`s:${sizeProduct.id}:0`);
   const blocked = fake.sent[fake.sent.length - 1];
   check('size stock limit enforced', blocked.text.includes('موجودی این بُعد تمام شده'), blocked.text);
 
-  const directOrder = store.createOrder({
-    chatId: '7',
+  // همه عکس‌های محصول باید برای مشتری ارسال شود
+  fs.writeFileSync(path.join(os.tmpdir(), 'img-1.jpg'), 'x');
+  fs.writeFileSync(path.join(os.tmpdir(), 'img-2.jpg'), 'x');
+  const gallery = store.saveProduct({
+    name: 'گالری',
+    price: 1000,
+    stock: 1,
+    images: ['img-1.jpg', 'img-2.jpg'],
+  });
+  const beforePhotos = fake.photos.filter((p) => String(p.chatId) === '42').length;
+  await cb(`p:${gallery.id}`);
+  const afterPhotos = fake.photos.filter((p) => String(p.chatId) === '42').length;
+  check('all product images sent', afterPhotos - beforePhotos === 2, String(afterPhotos - beforePhotos));
+
+  const directOrder = store.createOrder({    chatId: '7',
     customer: store.getCustomer(42),
     items: [
       {
@@ -216,6 +239,7 @@ function check(label, condition, extra = '') {
         size: '۱۲۰×۱۸۰',
         capacity: '۴ نفره',
         shape: 'دایره',
+        color: 'کرم',
         qty: 1,
         unitPrice: 500000,
       },

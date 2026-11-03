@@ -13,7 +13,7 @@ class Store {
       products: [],
       settings: {},
       categories: [],
-      options: { capacity: [], shape: [] },
+      options: { capacity: [], shape: [], color: [] },
       customers: {},
       orders: [],
       outbox: [],
@@ -34,6 +34,7 @@ class Store {
         options: {
           capacity: Array.isArray(raw.options?.capacity) ? raw.options.capacity.map(String) : [],
           shape: Array.isArray(raw.options?.shape) ? raw.options.shape.map(String) : [],
+          color: Array.isArray(raw.options?.color) ? raw.options.color.map(String) : [],
         },
         customers: raw.customers && typeof raw.customers === 'object' ? raw.customers : {},
         orders: Array.isArray(raw.orders) ? raw.orders : [],
@@ -61,6 +62,7 @@ class Store {
           label: String(s?.label ?? s ?? '').trim(),
           capacity: String(s?.capacity ?? '').trim(),
           shape: String(s?.shape ?? '').trim(),
+          color: String(s?.color ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
           stock:
             s?.stock === null || s?.stock === undefined || s?.stock === ''
@@ -184,6 +186,7 @@ class Store {
           label: String(s?.label ?? '').trim(),
           capacity: String(s?.capacity ?? '').trim(),
           shape: String(s?.shape ?? '').trim(),
+          color: String(s?.color ?? '').trim(),
           price: Number(s?.price) > 0 ? Number(s.price) : null,
           stock:
             s?.stock === null || s?.stock === undefined || s?.stock === ''
@@ -242,6 +245,9 @@ class Store {
       }
       if (size.shape && !this.data.options.shape.includes(size.shape)) {
         this.data.options.shape.push(size.shape);
+      }
+      if (size.color && !this.data.options.color.includes(size.color)) {
+        this.data.options.color.push(size.color);
       }
     }
 
@@ -378,6 +384,16 @@ class Store {
     return this.data.orders.find((o) => o.id === Number(id)) || null;
   }
 
+  /** لغو سفارش در انتظار (موجودی تغییر نمی‌کند) */
+  cancelOrder(id) {
+    const order = this.getOrder(id);
+    if (!order || order.status === 'done' || order.status === 'canceled') return null;
+    order.status = 'canceled';
+    order.canceledAt = Date.now();
+    this.save();
+    return order;
+  }
+
   listOrders() {
     return [...this.data.orders].sort((a, b) => b.id - a.id);
   }
@@ -395,7 +411,8 @@ class Store {
         (s) =>
           s.label === item.size &&
           (s.capacity || '') === (item.capacity || '') &&
-          (s.shape || '') === (item.shape || '')
+          (s.shape || '') === (item.shape || '') &&
+          (s.color || '') === (item.color || '')
       );
       if (size && size.stock !== null && size.stock !== undefined) {
         size.stock = Math.max(0, Number(size.stock) - Number(item.qty || 0));

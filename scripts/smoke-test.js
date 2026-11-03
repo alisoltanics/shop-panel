@@ -79,9 +79,17 @@ app.whenReady().then(async () => {
     out.sizeRows = document.querySelectorAll('.size-row:not(.size-head)').length;
     out.sizeInputs = document.querySelectorAll('.size-row:not(.size-head) input').length;
     out.sizeSelects = document.querySelectorAll('.size-row:not(.size-head) select').length;
+    out.hasColorField = !!document.getElementById('colorList');
     out.capacityOptionCount = document.querySelector('.size-row select')?.options.length || 0;
     out.hasOldAttrsSection = !!document.getElementById('btnAddAttr');
     out.hasVideoPicker = !!document.getElementById('btnAddVideo');
+
+    const category = document.getElementById('f-category');
+    category.value = 'رومیزی';
+    category.dispatchEvent(new Event('change'));
+    out.priceHiddenForTablecloth =
+      document.getElementById('priceField').classList.contains('hidden') &&
+      document.getElementById('stockField').classList.contains('hidden');
 
     document.getElementById('modal').classList.add('hidden');
 
@@ -128,9 +136,11 @@ app.whenReady().then(async () => {
     result.modalOpened &&
     result.sizeRows === 1 &&
     result.sizeInputs === 3 &&
-    result.sizeSelects === 2 &&
+    result.sizeSelects === 3 &&
+    result.hasColorField &&
     result.capacityOptionCount >= 3 &&
     result.hasOldAttrsSection === false &&
+    result.priceHiddenForTablecloth &&
     result.hasVideoPicker &&
     result.settingsVisible &&
     result.categoryChipsAfterAdd === 3 &&

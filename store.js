@@ -18,6 +18,8 @@ class Store {
       orders: [],
       outbox: [],
       views: [],
+      abuse: [],
+      blocked: {},
       mediaCache: {},
       nextId: 1,
       nextOrderId: 0,
@@ -42,6 +44,8 @@ class Store {
         orders: Array.isArray(raw.orders) ? raw.orders : [],
         outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
         views: Array.isArray(raw.views) ? raw.views : [],
+        abuse: Array.isArray(raw.abuse) ? raw.abuse : [],
+        blocked: raw.blocked && typeof raw.blocked === 'object' ? raw.blocked : {},
         mediaCache: raw.mediaCache && typeof raw.mediaCache === 'object' ? raw.mediaCache : {},
         nextId: Number(raw.nextId) || 1,
         nextOrderId: Number(raw.nextOrderId) || 0,
@@ -433,6 +437,51 @@ class Store {
 
   listViews() {
     return [...this.data.views].sort((a, b) => b.at - a.at);
+  }
+
+  /* ---------- گزارش تخلف و مسدودسازی ---------- */
+
+  isBlocked(chatId) {
+    return !!this.data.blocked[String(chatId)];
+  }
+
+  blockUser(chatId, reason = '') {
+    this.data.blocked[String(chatId)] = { reason: String(reason || ''), at: Date.now() };
+    const report = this.data.abuse.find((item) => item.chatId === String(chatId));
+    if (report) report.blocked = true;
+    this.save();
+  }
+
+  unblockUser(chatId) {
+    delete this.data.blocked[String(chatId)];
+    const report = this.data.abuse.find((item) => item.chatId === String(chatId));
+    if (report) report.blocked = false;
+    this.save();
+  }
+
+  reportAbuse(chatId, info = {}) {
+    const id = String(chatId);
+    const entry = {
+      chatId: id,
+      name: String(info.name || '').trim(),
+      username: String(info.username || '').trim(),
+      reason: String(info.reason || '').trim(),
+      count: Number(info.count) || 0,
+      at: Date.now(),
+      blocked: this.isBlocked(id),
+    };
+
+    const existing = this.data.abuse.find((item) => item.chatId === id);
+    if (existing) Object.assign(existing, entry);
+    else this.data.abuse.push(entry);
+
+    this.data.abuse = this.data.abuse.slice(-200);
+    this.save();
+    return entry;
+  }
+
+  listAbuseReports() {
+    return [...this.data.abuse].sort((a, b) => b.at - a.at);
   }
 
   /* ---------- کش فایل‌های تلگرام (file_id) ---------- */

@@ -25,6 +25,7 @@
           <button class="tab" data-tab="orders"><span class="nav-icon">🧾</span> سفارش‌ها</button>
           <button class="tab" data-tab="customers"><span class="nav-icon">🧑‍💼</span> مشتریان</button>
           <button class="tab" data-tab="views"><span class="nav-icon">👁️</span> بازدیدها</button>
+          <button class="tab" data-tab="abuse"><span class="nav-icon">🚫</span> گزارش تخلف</button>
           <button class="tab" data-tab="settings"><span class="nav-icon">⚙️</span> تنظیمات و ربات‌ها</button>
         </nav>
 
@@ -134,6 +135,18 @@
         <div class="empty hidden" id="viewsEmpty">
           <div class="empty-icon">👁️</div>
           <p>هنوز کسی لیست محصولات را در ربات باز نکرده است.</p>
+        </div>
+      </section>
+
+      <!-- گزارش تخلف -->
+      <section class="panel" id="panel-abuse">
+        <div class="toolbar">
+          <button class="btn" id="btnRefreshAbuse">↻ به‌روزرسانی گزارش‌ها</button>
+        </div>
+        <div id="abuseList" class="orders"></div>
+        <div class="empty hidden" id="abuseEmpty">
+          <div class="empty-icon">🛡️</div>
+          <p>هیچ کاربر مزاحمی گزارش نشده است.</p>
         </div>
       </section>
 

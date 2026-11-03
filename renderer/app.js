@@ -35,6 +35,7 @@ const PAGE_META = {
   orders: ['سفارش‌ها', 'پیگیری سفارش‌های ثبت‌شده از ربات'],
   customers: ['مشتریان', 'خریداران نهایی‌شده و تاریخچه خریدشان'],
   views: ['بازدیدها', 'چه کسانی لیست محصولات ربات را دیده‌اند'],
+  abuse: ['گزارش تخلف', 'کاربران مزاحم و مسدودسازی آن‌ها'],
   settings: ['تنظیمات و ربات‌ها', 'اتصال تلگرام و بله، دسته‌بندی و گزینه‌ها'],
 };
 
@@ -51,6 +52,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
 
     if (tab.dataset.tab === 'orders' || tab.dataset.tab === 'customers') loadOrders();
     if (tab.dataset.tab === 'views') loadViews();
+    if (tab.dataset.tab === 'abuse') loadAbuse();
   });
 });
 
@@ -1104,6 +1106,88 @@ async function loadViews() {
 
 $('#btnRefreshViews').onclick = loadViews;
 
+/* ---------------- گزارش تخلف ---------------- */
+function renderAbuse(reports) {
+  const wrap = $('#abuseList');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  $('#abuseEmpty')?.classList.toggle('hidden', reports.length > 0);
+
+  reports.forEach((report) => {
+    const card = document.createElement('article');
+    card.className = 'customer-card';
+
+    const head = document.createElement('div');
+    head.className = 'cust-head';
+
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar';
+    avatar.textContent = String(report.name || report.username || '?').trim().charAt(0);
+
+    const info = document.createElement('div');
+    info.className = 'cust-info';
+
+    const name = document.createElement('div');
+    name.className = 'cust-name';
+    name.textContent = report.name || (report.username ? `@${report.username}` : `کاربر ${report.chatId}`);
+
+    const meta = document.createElement('div');
+    meta.className = 'cust-meta';
+    meta.textContent = [
+      report.username ? `@${report.username}` : '',
+      `شناسه: ${report.chatId}`,
+      `${Number(report.count) || 0} اقدام`,
+      formatDate(report.at),
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    info.append(name, meta);
+
+    const status = document.createElement('span');
+    status.className = `abuse-status ${report.blocked ? 'blocked' : 'free'}`;
+    status.textContent = report.blocked ? 'مسدود' : 'آزاد';
+
+    head.append(avatar, info, status);
+
+    const reason = document.createElement('div');
+    reason.className = 'abuse-reason';
+    reason.textContent = `دلیل گزارش: ${report.reason || 'رفتار مشکوک'}`;
+
+    const actions = document.createElement('div');
+    actions.className = 'order-actions';
+
+    const action = document.createElement('button');
+    action.className = `btn small ${report.blocked ? '' : 'danger-ghost'}`;
+    action.textContent = report.blocked ? '✅ رفع مسدودی' : '🚫 بلاک از ربات';
+    action.onclick = async () => {
+      if (!report.blocked && !confirm(`کاربر «${report.name || report.chatId}» از ربات بلاک شود؟`)) return;
+
+      const updated = report.blocked
+        ? await api.unblockUser(report.chatId)
+        : await api.blockUser(report.chatId, report.reason);
+
+      renderAbuse(updated);
+      toast(report.blocked ? 'کاربر آزاد شد' : 'کاربر بلاک شد');
+    };
+
+    actions.appendChild(action);
+    card.append(head, reason, actions);
+    wrap.appendChild(card);
+  });
+}
+
+async function loadAbuse() {
+  try {
+    renderAbuse(await api.listAbuse());
+  } catch (err) {
+    toast(err.message || 'خطا در دریافت گزارش‌ها', true);
+  }
+}
+
+$('#btnRefreshAbuse').onclick = loadAbuse;
+api.onAbuseChanged(() => loadAbuse());
+
 api.onBotStatus(applyBotStatus);
 api.onProductsChanged(() => {
   loadProducts();
@@ -1118,6 +1202,7 @@ $('#btnOpenData').onclick = () => api.openDataDir();
   await loadProducts();
   await loadSettings();
   await loadOrders();
+  await loadAbuse();
   try {
     const info = await api.getAppInfo();
     $('#appVersion').textContent = info.version;

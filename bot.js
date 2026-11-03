@@ -101,10 +101,65 @@ async function startBot({
   getShopChatId,
   onStatus,
   onStockChanged,
+  onAbuse,
 }) {
   const baseUrl = messenger === 'bale' ? `https://tapi.bale.ai/bot${String(token).trim()}` : undefined;
   const bot = new TelegramClient(token, { baseUrl });
   const config = () => (typeof getConfig === 'function' ? getConfig() : {}) || {};
+
+  /* ------------------------- کنترل تخلف ------------------------- */
+  const activity = new Map();
+  const blockedNotified = new Map();
+
+  function trackActivity(chatId, key, from) {
+    const now = Date.now();
+    const entry = activity.get(chatId) || {
+      times: [],
+      lastKey: '',
+      sameCount: 0,
+      sameStart: 0,
+      lastReportAt: 0,
+    };
+
+    entry.times = entry.times.filter((time) => now - time < 10_000);
+    entry.times.push(now);
+
+    if (entry.lastKey === key && now - entry.sameStart < 5_000) {
+      entry.sameCount += 1;
+    } else {
+      entry.lastKey = key;
+      entry.sameCount = 1;
+      entry.sameStart = now;
+    }
+    activity.set(chatId, entry);
+
+    if (now - entry.lastReportAt < 60_000) return;
+
+    let reason = '';
+    if (entry.times.length >= 20) reason = `${entry.times.length} اقدام در ۱۰ ثانیه (اسپم دکمه‌ها)`;
+    else if (entry.sameCount >= 10) reason = `تکرار پشت‌سرهم یک دکمه (${entry.sameCount} بار در ۵ ثانیه)`;
+    if (!reason) return;
+
+    entry.lastReportAt = now;
+    store.reportAbuse(chatId, {
+      name: [from?.first_name, from?.last_name].filter(Boolean).join(' ') || from?.username || '',
+      username: from?.username || '',
+      reason,
+      count: entry.times.length,
+    });
+    onAbuse?.();
+  }
+
+  function blockedGate(chatId) {
+    if (!store.isBlocked(chatId)) return false;
+
+    const now = Date.now();
+    if (now - (blockedNotified.get(chatId) || 0) > 5 * 60 * 1000) {
+      blockedNotified.set(chatId, now);
+      bot.sendMessage(chatId, '⛔ دسترسی شما به این ربات مسدود شده است.').catch(() => {});
+    }
+    return true;
+  }
 
   let me;
   try {
@@ -667,6 +722,9 @@ async function startBot({
       const chatId = msg.chat.id;
       const text = (msg.text || '').trim();
 
+      if (blockedGate(chatId)) return;
+      trackActivity(chatId, `msg:${text}`, msg.from);
+
       if (text === '/id') {
         return bot.sendMessage(chatId, `🆔 چت آیدی شما: <code>${chatId}</code>`, { parse_mode: 'HTML' });
       }
@@ -763,6 +821,14 @@ async function startBot({
     const chatId = q.message?.chat?.id;
     const [action, arg1, arg2, arg3] = String(q.data || '').split(':');
     if (!chatId) return;
+
+    if (blockedGate(chatId)) {
+      return bot.answerCallbackQuery(q.id, {
+        text: '⛔ دسترسی شما مسدود شده است',
+        show_alert: true,
+      });
+    }
+    trackActivity(chatId, `cb:${String(q.data || '')}`, q.from);
 
     try {
       if (action === 'noop') return bot.answerCallbackQuery(q.id);

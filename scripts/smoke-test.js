@@ -42,6 +42,19 @@ ipcMain.handle('orders:list', () => [
 ipcMain.handle('orders:cancel', () => ({}));
 ipcMain.handle('orders:tracking', () => ({ order: {}, sent: false }));
 ipcMain.handle('views:list', () => []);
+ipcMain.handle('abuse:list', () => [
+  {
+    chatId: '77',
+    name: 'کاربر مزاحم',
+    username: 'spammer',
+    reason: '21 اقدام در ۱۰ ثانیه (اسپم دکمه‌ها)',
+    count: 21,
+    at: Date.now(),
+    blocked: false,
+  },
+]);
+ipcMain.handle('abuse:block', () => []);
+ipcMain.handle('abuse:unblock', () => []);
 ipcMain.handle('options:list', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
 ipcMain.handle('options:add', (_e, kind, value) => (kind === 'capacity' ? ['۴ نفره', value] : ['دایره', value]));
 ipcMain.handle('options:remove', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
@@ -131,22 +144,30 @@ app.whenReady().then(async () => {
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
     out.orderCards = document.querySelectorAll('.order-card').length;
     out.trackInputs = document.querySelectorAll('.track-row input').length;
-    out.cancelButtons = document.querySelectorAll('.order-actions .btn').length;
+    out.cancelButtons = document.querySelectorAll('#ordersList .order-actions .btn').length;
     out.hasCancelModal = !!document.getElementById('cancelConfirm');
 
     document.querySelector('[data-tab="customers"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     out.customersVisible = document.getElementById('panel-customers').classList.contains('active');
-    out.customerCards = document.querySelectorAll('.customer-card').length;
-    const toggle = document.querySelector('.customer-card .btn');
+    out.customerCards = document.querySelectorAll('#customersList .customer-card').length;
+    const toggle = document.querySelector('#customersList .customer-card .btn');
     if (toggle) { toggle.click(); out.clickedButtons++; }
-    out.customerDetailsOpen = !document.querySelector('.cust-details')?.classList.contains('hidden');
+    out.customerDetailsOpen = !document
+      .querySelector('#customersList .cust-details')
+      ?.classList.contains('hidden');
 
     document.querySelector('[data-tab="views"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
     out.viewsVisible = document.getElementById('panel-views').classList.contains('active');
     out.viewsEmptyShown = !document.getElementById('viewsEmpty').classList.contains('hidden');
     out.hasViewsStats = !!document.getElementById('statViewsToday');
+
+    document.querySelector('[data-tab="abuse"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    out.abuseVisible = document.getElementById('panel-abuse').classList.contains('active');
+    out.abuseCards = document.querySelectorAll('#abuseList .customer-card').length;
+    out.abuseBlockButtons = document.querySelectorAll('#abuseList .order-actions .btn').length;
     out.hasShippingField = !!document.getElementById('s-shipping');
     out.hasTelegramFields = !!document.getElementById('tg-token') && !!document.getElementById('tg-chat');
     out.hasBaleFields = !!document.getElementById('bale-token') && !!document.getElementById('bale-chat');
@@ -156,7 +177,7 @@ app.whenReady().then(async () => {
 
   const ok =
     result.hasApi &&
-    result.tabs === 5 &&
+    result.tabs === 6 &&
     result.modalOpened &&
     result.sizeRows === 1 &&
     result.sizeInputs === 3 &&
@@ -179,6 +200,9 @@ app.whenReady().then(async () => {
     result.viewsVisible &&
     result.viewsEmptyShown &&
     result.hasViewsStats &&
+    result.abuseVisible &&
+    result.abuseCards === 1 &&
+    result.abuseBlockButtons === 1 &&
     result.customersVisible &&
     result.customerCards === 1 &&
     result.customerDetailsOpen &&

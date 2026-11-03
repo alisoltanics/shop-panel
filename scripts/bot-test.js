@@ -296,6 +296,25 @@ function check(label, condition, extra = '') {
   await cb('confirmorder');
   check('failed message queued', store.listOutbox().length === 1, String(store.listOutbox().length));
 
+  // تشخیص اسپم و بلاک
+  for (let i = 0; i < 21; i += 1) {
+    await cb(`pick:${product.id}`, 77, { username: 'spammer', first_name: 'اسپم' });
+  }
+  const report = store.listAbuseReports().find((item) => item.chatId === '77');
+  check(
+    'abuse detected with reason',
+    !!report && (report.reason.includes('اقدام') || report.reason.includes('تکرار')),
+    report?.reason
+  );
+
+  store.blockUser('77', report?.reason);
+  const answersBefore = fake.answers.length;
+  await cb(`pick:${product.id}`, 77, { username: 'spammer' });
+  const blockAnswer = fake.answers
+    .slice(answersBefore)
+    .find((answer) => String(answer.options?.text || '').includes('مسدود'));
+  check('blocked user is rejected', !!blockAnswer, JSON.stringify(fake.answers.slice(answersBefore)));
+
   await bot.stopPolling();
   fs.unlinkSync(file);
   console.log(failures ? `❌ ${failures} test(s) failed` : '✅ BOT TEST PASSED');

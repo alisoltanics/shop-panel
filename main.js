@@ -101,6 +101,11 @@ async function startBotFor(messenger) {
       },
       onStatus: (status) => setBotStatus(messenger, status),
       onStockChanged: broadcastStock,
+      onAbuse: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('abuse:changed');
+        }
+      },
     });
   } catch (err) {
     bots[messenger] = null;
@@ -312,6 +317,16 @@ function registerIpc() {
   });
 
   ipcMain.handle('views:list', () => store.listViews());
+
+  ipcMain.handle('abuse:list', () => store.listAbuseReports());
+  ipcMain.handle('abuse:block', (_e, chatId, reason) => {
+    store.blockUser(chatId, reason);
+    return store.listAbuseReports();
+  });
+  ipcMain.handle('abuse:unblock', (_e, chatId) => {
+    store.unblockUser(chatId);
+    return store.listAbuseReports();
+  });
 
   ipcMain.handle('options:list', (_e, kind) => store.listOptions(kind));
   ipcMain.handle('options:add', (_e, kind, value) => store.addOption(kind, value));

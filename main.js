@@ -59,6 +59,20 @@ function broadcastStock() {
   }
 }
 
+/** پیام اپلیکیشن به مشتری، از همان پیام‌رسانی که سفارش آمده */
+async function sendToCustomer(order, text) {
+  const messenger = order.messenger === 'bale' ? 'bale' : 'telegram';
+  const instance = bots[messenger] || bots.telegram || bots.bale;
+  if (!instance) return false;
+
+  try {
+    await instance.sendMessage(order.chatId, text, { parse_mode: 'HTML' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function startBotFor(messenger) {
   if (bots[messenger]) return botStatuses[messenger];
 
@@ -264,7 +278,40 @@ function registerIpc() {
   ipcMain.handle('categories:remove', (_e, name) => store.removeCategory(name));
 
   ipcMain.handle('orders:list', () => store.listOrders());
-  ipcMain.handle('orders:cancel', (_e, id) => store.cancelOrder(id));
+
+  ipcMain.handle('orders:cancel', async (_e, id, reason) => {
+    const order = store.cancelOrder(id, reason);
+    if (!order) return null;
+
+    const text = [
+      `❌ سفارش شما با کد <b>#${order.code}</b> لغو شد.`,
+      order.cancelReason ? `دلیل: ${order.cancelReason}` : '',
+      '',
+      'برای پیگیری یا ثبت سفارش جدید می‌توانید به پشتیبانی پیام بدهید.',
+    ]
+      .filter((line) => line !== undefined)
+      .join('\n');
+
+    await sendToCustomer(order, text);
+    return order;
+  });
+
+  ipcMain.handle('orders:tracking', async (_e, id, code) => {
+    const order = store.setOrderTracking(id, code);
+    if (!order) return { order: null, sent: false };
+
+    const text = [
+      `📦 سفارش شما با کد <b>#${order.code}</b> ارسال شد.`,
+      `🔢 کد رهگیری پست: <b>${order.trackingCode}</b>`,
+      '',
+      'با این کد می‌توانید وضعیت مرسوله را در سایت پست پیگیری کنید.',
+    ].join('\n');
+
+    const sent = order.trackingCode ? await sendToCustomer(order, text) : false;
+    return { order, sent };
+  });
+
+  ipcMain.handle('views:list', () => store.listViews());
 
   ipcMain.handle('options:list', (_e, kind) => store.listOptions(kind));
   ipcMain.handle('options:add', (_e, kind, value) => store.addOption(kind, value));

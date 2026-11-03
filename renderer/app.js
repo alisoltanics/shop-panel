@@ -34,6 +34,7 @@ const PAGE_META = {
   products: ['محصولات', 'کاتالوگ فروشگاه را مدیریت کنید'],
   orders: ['سفارش‌ها', 'پیگیری سفارش‌های ثبت‌شده از ربات'],
   customers: ['مشتریان', 'خریداران نهایی‌شده و تاریخچه خریدشان'],
+  views: ['بازدیدها', 'چه کسانی لیست محصولات ربات را دیده‌اند'],
   settings: ['تنظیمات و ربات‌ها', 'اتصال تلگرام و بله، دسته‌بندی و گزینه‌ها'],
 };
 
@@ -49,6 +50,7 @@ document.querySelectorAll('.tab').forEach((tab) => {
     }
 
     if (tab.dataset.tab === 'orders' || tab.dataset.tab === 'customers') loadOrders();
+    if (tab.dataset.tab === 'views') loadViews();
   });
 });
 
@@ -854,19 +856,36 @@ function renderOrders(orders) {
 
     card.append(head, meta, addr, list, total);
 
+    if (order.status !== 'canceled') {
+      const track = document.createElement('div');
+      track.className = 'track-row';
+
+      const input = document.createElement('input');
+      input.placeholder = 'کد رهگیری پست';
+      input.value = order.trackingCode || '';
+
+      const send = document.createElement('button');
+      send.className = 'btn small';
+      send.textContent = order.trackingCode ? 'ویرایش و ارسال کد' : 'ثبت و ارسال کد به مشتری';
+      send.onclick = async () => {
+        const code = input.value.trim();
+        if (!code) return toast('کد رهگیری را وارد کنید', true);
+        const result = await api.setOrderTracking(order.id, code);
+        toast(result.sent ? 'کد رهگیری برای مشتری ارسال شد' : 'کد ذخیره شد (ربات فعال نیست)', !result.sent);
+        await loadOrders();
+      };
+
+      track.append(input, send);
+      card.appendChild(track);
+    }
+
     if (order.status === 'pending') {
       const actions = document.createElement('div');
       actions.className = 'order-actions';
       const cancel = document.createElement('button');
       cancel.className = 'btn small danger-ghost';
       cancel.textContent = 'لغو سفارش';
-      cancel.onclick = async () => {
-        if (!confirm(`سفارش #${order.code} لغو شود؟`)) return;
-        const updated = await api.cancelOrder(order.id);
-        if (!updated) return toast('امکان لغو این سفارش نیست', true);
-        toast('سفارش لغو شد');
-        await loadOrders();
-      };
+      cancel.onclick = () => openCancelModal(order);
       actions.appendChild(cancel);
       card.appendChild(actions);
     }
@@ -978,6 +997,112 @@ function renderCustomers() {
 }
 
 $('#btnRefreshCustomers').onclick = loadOrders;
+
+/* ---------------- لغو سفارش با دلیل ---------------- */
+let pendingCancelOrder = null;
+
+function openCancelModal(order) {
+  pendingCancelOrder = order;
+  $('#cancelReasonSelect').value = 'ناموجود بودن محصول';
+  $('#cancelReasonText').value = '';
+  $('#cancelModal').classList.remove('hidden');
+}
+
+function closeCancelModal() {
+  $('#cancelModal').classList.add('hidden');
+  pendingCancelOrder = null;
+}
+
+$('#cancelModalClose').onclick = closeCancelModal;
+$('#cancelDismiss').onclick = closeCancelModal;
+$('#cancelModal').addEventListener('click', (event) => {
+  if (event.target.id === 'cancelModal') closeCancelModal();
+});
+
+$('#cancelConfirm').onclick = async () => {
+  if (!pendingCancelOrder) return;
+
+  const order = pendingCancelOrder;
+  const base = $('#cancelReasonSelect').value;
+  const extra = $('#cancelReasonText').value.trim();
+  const reason = extra ? `${base} — ${extra}` : base;
+
+  const updated = await api.cancelOrder(order.id, reason);
+  closeCancelModal();
+
+  if (!updated) return toast('امکان لغو این سفارش نیست', true);
+  toast('سفارش لغو شد و دلیل برای مشتری ارسال شد');
+  await loadOrders();
+};
+
+/* ---------------- بازدیدهای لیست محصول ---------------- */
+function dateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function renderViews(views) {
+  const wrap = $('#viewsList');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  $('#viewsEmpty')?.classList.toggle('hidden', views.length > 0);
+
+  const today = dateKey(new Date());
+  const weekAgo = Date.now() - 7 * 86400000;
+
+  $('#statViewsToday').textContent = views.filter((v) => v.date === today).length.toLocaleString('fa-IR');
+  $('#statViewsWeek').textContent = views.filter((v) => Number(v.at) >= weekAgo).length.toLocaleString('fa-IR');
+  $('#statViewsTotal').textContent = views.length.toLocaleString('fa-IR');
+
+  const groups = new Map();
+  views.forEach((view) => {
+    if (!groups.has(view.date)) groups.set(view.date, []);
+    groups.get(view.date).push(view);
+  });
+
+  [...groups.entries()].forEach(([date, list]) => {
+    const card = document.createElement('article');
+    card.className = 'view-card';
+
+    const head = document.createElement('div');
+    head.className = 'view-date';
+    const title = document.createElement('span');
+    title.textContent = date;
+    const count = document.createElement('span');
+    count.textContent = `${list.length} بازدید یکتا`;
+    head.append(title, count);
+    card.appendChild(head);
+
+    [...list]
+      .sort((a, b) => Number(b.at) - Number(a.at))
+      .forEach((view) => {
+        const row = document.createElement('div');
+        row.className = 'view-row';
+
+        const name = document.createElement('span');
+        name.className = 'view-name';
+        name.textContent = view.name || (view.username ? `@${view.username}` : `کاربر ${view.chatId}`);
+
+        const meta = document.createElement('span');
+        meta.className = 'view-meta';
+        meta.textContent = view.username ? `@${view.username}` : new Date(view.at).toLocaleTimeString('fa-IR');
+
+        row.append(name, meta);
+        card.appendChild(row);
+      });
+
+    wrap.appendChild(card);
+  });
+}
+
+async function loadViews() {
+  try {
+    renderViews(await api.listViews());
+  } catch (err) {
+    toast(err.message || 'خطا در دریافت بازدیدها', true);
+  }
+}
+
+$('#btnRefreshViews').onclick = loadViews;
 
 api.onBotStatus(applyBotStatus);
 api.onProductsChanged(() => {

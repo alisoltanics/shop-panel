@@ -224,6 +224,11 @@ async function startBot({
     const product = store.getProduct(id);
     if (!product) return bot.sendMessage(chatId, 'محصول پیدا نشد.');
 
+    const imageFiles = (product.images || [])
+      .map((name) => path.join(imagesDir, name))
+      .filter((file) => fs.existsSync(file))
+      .slice(0, 10);
+
     const hasChoices = sizesOf(product).length > 0 || attributesOf(product).length > 0;
     const rows = [
       [
@@ -233,6 +238,13 @@ async function startBot({
         },
       ],
     ];
+
+    if (imageFiles.length > 1) {
+      rows.push([
+        { text: `🖼 دیدن عکس‌های بیشتر (${imageFiles.length - 1})`, callback_data: `more:${product.id}` },
+      ]);
+    }
+
     rows.push([{ text: '🧺 سبد خرید', callback_data: 'cart' }, { text: '🔙 محصولات', callback_data: 'pg:0' }]);
     const keyboard = { inline_keyboard: rows };
 
@@ -245,33 +257,14 @@ async function startBot({
       }
     }
 
-    const photos = (product.images || [])
-      .map((name) => path.join(imagesDir, name))
-      .filter((file) => fs.existsSync(file))
-      .slice(0, 10);
-
-    if (photos.length) {
-      let sentMain = false;
+    if (imageFiles.length) {
       try {
-        await bot.sendPhoto(chatId, photos[0], {
+        return await bot.sendPhoto(chatId, imageFiles[0], {
           caption: productCaption(product),
           parse_mode: 'HTML',
           reply_markup: keyboard,
         });
-        sentMain = true;
       } catch {}
-
-      if (!sentMain) {
-        await bot.sendMessage(chatId, productCaption(product), { parse_mode: 'HTML', reply_markup: keyboard });
-      }
-
-      // بقیه عکس‌های محصول هم برای مشتری ارسال می‌شوند
-      for (const file of photos.slice(1)) {
-        try {
-          await bot.sendPhoto(chatId, file);
-        } catch {}
-      }
-      return;
     }
 
     return bot.sendMessage(chatId, productCaption(product), { parse_mode: 'HTML', reply_markup: keyboard });
@@ -406,7 +399,7 @@ async function startBot({
         const label = [size.capacity, size.shape, size.color, size.label].filter(Boolean).join(' • ') || 'گزینه';
         return [
           {
-            text: label.length > 34 ? `${label.slice(0, 33)}…` : label,
+            text: label,
             callback_data: `s:${product.id}:${index}`,
           },
         ];
@@ -529,6 +522,13 @@ async function startBot({
     ].join('\n');
   }
 
+  function recordView(chatId, from) {
+    try {
+      const name = [from?.first_name, from?.last_name].filter(Boolean).join(' ') || from?.username || '';
+      store.recordListView(chatId, { name, username: from?.username || '' });
+    } catch {}
+  }
+
   function askStep(chatId, step, current = '') {
     const extra = current ? `\nمقدار فعلی: <b>${esc(current)}</b>` : '';
     return bot.sendMessage(chatId, `${STEP_LABELS[step]} را وارد کنید:${extra}`, { parse_mode: 'HTML' });
@@ -575,6 +575,7 @@ async function startBot({
         unitPrice: i.unitPrice,
       })),
       shipping: shippingFee(),
+      messenger,
     });
     store.saveCustomer(chatId, customer);
     carts.delete(chatId);
@@ -627,6 +628,7 @@ async function startBot({
 
       if (text === '/start') {
         sessions.delete(chatId);
+        recordView(chatId, msg.from);
         await bot.sendMessage(chatId, `🛍 <b>${esc(shopName())}</b>\nاز منوی زیر انتخاب کنید:`, {
           parse_mode: 'HTML',
           reply_markup: MENU,
@@ -637,6 +639,7 @@ async function startBot({
 
       if (text === '/products' || text === '🛍 محصولات') {
         sessions.delete(chatId);
+        recordView(chatId, msg.from);
         const v = productsView(0);
         return bot.sendMessage(chatId, v.text, v.opts);
       }
@@ -721,6 +724,7 @@ async function startBot({
 
       if (action === 'pg') {
         await bot.answerCallbackQuery(q.id);
+        recordView(chatId, q.from);
         const v = productsView(Number(arg1) || 0);
         return bot.sendMessage(chatId, v.text, v.opts);
       }
@@ -728,6 +732,21 @@ async function startBot({
       if (action === 'p') {
         await bot.answerCallbackQuery(q.id);
         return sendProduct(chatId, arg1);
+      }
+
+      if (action === 'more') {
+        await bot.answerCallbackQuery(q.id);
+        const product = store.getProduct(arg1);
+        const photos = (product?.images || [])
+          .map((name) => path.join(imagesDir, name))
+          .filter((file) => fs.existsSync(file))
+          .slice(1, 10);
+        for (const file of photos) {
+          try {
+            await bot.sendPhoto(chatId, file);
+          } catch {}
+        }
+        return;
       }
 
       if (action === 'pick' || action === 'add') {

@@ -17,6 +17,7 @@ class Store {
       customers: {},
       orders: [],
       outbox: [],
+      views: [],
       nextId: 1,
       nextOrderId: 0,
       nextOutboxId: 0,
@@ -39,6 +40,7 @@ class Store {
         customers: raw.customers && typeof raw.customers === 'object' ? raw.customers : {},
         orders: Array.isArray(raw.orders) ? raw.orders : [],
         outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
+        views: Array.isArray(raw.views) ? raw.views : [],
         nextId: Number(raw.nextId) || 1,
         nextOrderId: Number(raw.nextOrderId) || 0,
         nextOutboxId: Number(raw.nextOutboxId) || 0,
@@ -360,7 +362,7 @@ class Store {
 
   /* ---------- سفارش‌ها ---------- */
 
-  createOrder({ chatId, customer, items, shipping = 0 }) {
+  createOrder({ chatId, customer, items, shipping = 0, messenger = '', trackingCode = '' }) {
     const itemsTotal = items.reduce((sum, i) => sum + Number(i.unitPrice || 0) * Number(i.qty || 0), 0);
     const shippingFee = Math.max(0, Number(shipping) || 0);
     const order = {
@@ -372,6 +374,8 @@ class Store {
       itemsTotal,
       shipping: shippingFee,
       total: itemsTotal + shippingFee,
+      messenger: String(messenger || ''),
+      trackingCode: String(trackingCode || ''),
       status: 'pending',
       createdAt: Date.now(),
     };
@@ -385,13 +389,48 @@ class Store {
   }
 
   /** لغو سفارش در انتظار (موجودی تغییر نمی‌کند) */
-  cancelOrder(id) {
+  cancelOrder(id, reason = '') {
     const order = this.getOrder(id);
     if (!order || order.status === 'done' || order.status === 'canceled') return null;
     order.status = 'canceled';
+    order.cancelReason = String(reason || '').trim();
     order.canceledAt = Date.now();
     this.save();
     return order;
+  }
+
+  /** ثبت کد رهگیری پست روی سفارش */
+  setOrderTracking(id, code) {
+    const order = this.getOrder(id);
+    if (!order) return null;
+    order.trackingCode = String(code || '').trim();
+    this.save();
+    return order;
+  }
+
+  /* ---------- بازدید لیست محصولات ---------- */
+
+  /** هر کاربر در هر روز فقط یک بار ثبت می‌شود */
+  recordListView(chatId, info = {}) {
+    const now = new Date();
+    const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const id = String(chatId);
+
+    if (this.data.views.some((view) => view.date === date && view.chatId === id)) return false;
+
+    this.data.views.push({
+      date,
+      chatId: id,
+      name: String(info.name || '').trim(),
+      username: String(info.username || '').trim(),
+      at: now.getTime(),
+    });
+    this.save();
+    return true;
+  }
+
+  listViews() {
+    return [...this.data.views].sort((a, b) => b.at - a.at);
   }
 
   listOrders() {

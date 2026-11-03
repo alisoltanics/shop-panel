@@ -24,6 +24,7 @@
           <button class="tab active" data-tab="products"><span class="nav-icon">📦</span> محصولات</button>
           <button class="tab" data-tab="orders"><span class="nav-icon">🧾</span> سفارش‌ها</button>
           <button class="tab" data-tab="customers"><span class="nav-icon">🧑‍💼</span> مشتریان</button>
+          <button class="tab" data-tab="views"><span class="nav-icon">👁️</span> بازدیدها</button>
           <button class="tab" data-tab="settings"><span class="nav-icon">⚙️</span> تنظیمات و ربات‌ها</button>
         </nav>
 
@@ -104,6 +105,35 @@
         <div class="empty hidden" id="customersEmpty">
           <div class="empty-icon">🧑‍💼</div>
           <p>هنوز سفارش نهایی‌شده‌ای ثبت نشده است.</p>
+        </div>
+      </section>
+
+      <!-- بازدیدها -->
+      <section class="panel" id="panel-views">
+        <div class="stats">
+          <div class="stat accent-blue">
+            <span class="stat-label">امروز</span>
+            <strong id="statViewsToday">۰</strong>
+            <span class="stat-hint">بازدید یکتا</span>
+          </div>
+          <div class="stat accent-green">
+            <span class="stat-label">۷ روز اخیر</span>
+            <strong id="statViewsWeek">۰</strong>
+            <span class="stat-hint">بازدید یکتا</span>
+          </div>
+          <div class="stat accent-violet">
+            <span class="stat-label">کل بازدیدها</span>
+            <strong id="statViewsTotal">۰</strong>
+            <span class="stat-hint">هر کاربر روزی یک بار</span>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="btnRefreshViews">↻ به‌روزرسانی بازدیدها</button>
+        </div>
+        <div id="viewsList" class="orders"></div>
+        <div class="empty hidden" id="viewsEmpty">
+          <div class="empty-icon">👁️</div>
+          <p>هنوز کسی لیست محصولات را در ربات باز نکرده است.</p>
         </div>
       </section>
 
@@ -266,6 +296,36 @@
         <div class="modal-foot">
           <button class="btn primary" id="btnSaveProduct">ذخیره محصول</button>
           <button class="btn" id="btnCancel">انصراف</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- دیالوگ لغو سفارش -->
+    <div class="modal hidden" id="cancelModal">
+      <div class="modal-box compact">
+        <div class="modal-head">
+          <h2>لغو سفارش</h2>
+          <button class="icon-btn" id="cancelModalClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <label>
+            دلیل لغو
+            <select id="cancelReasonSelect">
+              <option value="ناموجود بودن محصول">ناموجود بودن محصول</option>
+              <option value="انصراف مشتری">انصراف مشتری</option>
+              <option value="مشکل در پرداخت">مشکل در پرداخت</option>
+              <option value="آدرس یا اطلاعات ناقص">آدرس یا اطلاعات ناقص</option>
+              <option value="سایر">سایر</option>
+            </select>
+          </label>
+          <label>
+            توضیح بیشتر (اختیاری)
+            <textarea id="cancelReasonText" rows="3" placeholder="مثلاً این ابعاد فعلاً موجود نیست…"></textarea>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button class="btn primary" id="cancelConfirm">لغو سفارش و ارسال پیام</button>
+          <button class="btn" id="cancelDismiss">انصراف</button>
         </div>
       </div>
     </div>

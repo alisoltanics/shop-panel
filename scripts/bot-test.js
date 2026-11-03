@@ -135,6 +135,9 @@ function check(label, condition, extra = '') {
 
   await cb(`p:${product.id}`);
   await msg('/start');
+  await msg('/start');
+  const listViews = store.listViews().filter((view) => view.chatId === '42');
+  check('list views deduplicated per day', listViews.length === 1, String(listViews.length));
   await cb(`pick:${product.id}`);
   await cb(`o:${product.id}:0:1`);
   await cb(`o:${product.id}:1:1`);
@@ -216,7 +219,7 @@ function check(label, condition, extra = '') {
   const blocked = fake.sent[fake.sent.length - 1];
   check('size stock limit enforced', blocked.text.includes('موجودی این بُعد تمام شده'), blocked.text);
 
-  // همه عکس‌های محصول باید برای مشتری ارسال شود
+  // عکس اصلی + دکمه «عکس‌های بیشتر»
   fs.writeFileSync(path.join(os.tmpdir(), 'img-1.jpg'), 'x');
   fs.writeFileSync(path.join(os.tmpdir(), 'img-2.jpg'), 'x');
   const gallery = store.saveProduct({
@@ -225,10 +228,19 @@ function check(label, condition, extra = '') {
     stock: 1,
     images: ['img-1.jpg', 'img-2.jpg'],
   });
-  const beforePhotos = fake.photos.filter((p) => String(p.chatId) === '42').length;
+  const photosFor = (chat) => fake.photos.filter((p) => String(p.chatId) === chat).length;
+  const beforePhotos = photosFor('42');
   await cb(`p:${gallery.id}`);
-  const afterPhotos = fake.photos.filter((p) => String(p.chatId) === '42').length;
-  check('all product images sent', afterPhotos - beforePhotos === 2, String(afterPhotos - beforePhotos));
+  check('only main image sent first', photosFor('42') - beforePhotos === 1, String(photosFor('42') - beforePhotos));
+
+  const galleryPhoto = [...fake.photos].reverse().find((p) => String(p.chatId) === '42');
+  const moreButton = (galleryPhoto?.options?.reply_markup?.inline_keyboard || [])
+    .flat()
+    .find((b) => String(b.callback_data).startsWith('more:'));
+  check('more photos button present', !!moreButton);
+
+  await cb(`more:${gallery.id}`);
+  check('more photos sent on demand', photosFor('42') - beforePhotos === 2, String(photosFor('42') - beforePhotos));
 
   const directOrder = store.createOrder({    chatId: '7',
     customer: store.getCustomer(42),

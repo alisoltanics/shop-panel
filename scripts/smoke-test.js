@@ -26,7 +26,22 @@ ipcMain.handle('orders:list', () => [
     customer: { name: 'علی', phone: '09120000000', postalCode: '1234567890', address: 'تهران' },
     items: [{ name: 'رومیزی', size: '۱۲۰×۱۸۰', qty: 1, unitPrice: 1000000 }],
   },
+  {
+    id: 2,
+    code: '654321',
+    status: 'pending',
+    total: 500000,
+    shipping: 0,
+    createdAt: Date.now(),
+    chatId: '43',
+    trackingCode: '',
+    customer: { name: 'مریم', phone: '09121111111', postalCode: '1111111111', address: 'اصفهان' },
+    items: [{ name: 'کاور مبل', qty: 1, unitPrice: 500000 }],
+  },
 ]);
+ipcMain.handle('orders:cancel', () => ({}));
+ipcMain.handle('orders:tracking', () => ({ order: {}, sent: false }));
+ipcMain.handle('views:list', () => []);
 ipcMain.handle('options:list', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
 ipcMain.handle('options:add', (_e, kind, value) => (kind === 'capacity' ? ['۴ نفره', value] : ['دایره', value]));
 ipcMain.handle('options:remove', (_e, kind) => (kind === 'capacity' ? ['۴ نفره'] : ['دایره']));
@@ -115,6 +130,9 @@ app.whenReady().then(async () => {
     out.ordersVisible = document.getElementById('panel-orders').classList.contains('active');
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
     out.orderCards = document.querySelectorAll('.order-card').length;
+    out.trackInputs = document.querySelectorAll('.track-row input').length;
+    out.cancelButtons = document.querySelectorAll('.order-actions .btn').length;
+    out.hasCancelModal = !!document.getElementById('cancelConfirm');
 
     document.querySelector('[data-tab="customers"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -123,6 +141,12 @@ app.whenReady().then(async () => {
     const toggle = document.querySelector('.customer-card .btn');
     if (toggle) { toggle.click(); out.clickedButtons++; }
     out.customerDetailsOpen = !document.querySelector('.cust-details')?.classList.contains('hidden');
+
+    document.querySelector('[data-tab="views"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    out.viewsVisible = document.getElementById('panel-views').classList.contains('active');
+    out.viewsEmptyShown = !document.getElementById('viewsEmpty').classList.contains('hidden');
+    out.hasViewsStats = !!document.getElementById('statViewsToday');
     out.hasShippingField = !!document.getElementById('s-shipping');
     out.hasTelegramFields = !!document.getElementById('tg-token') && !!document.getElementById('tg-chat');
     out.hasBaleFields = !!document.getElementById('bale-token') && !!document.getElementById('bale-chat');
@@ -132,7 +156,7 @@ app.whenReady().then(async () => {
 
   const ok =
     result.hasApi &&
-    result.tabs === 4 &&
+    result.tabs === 5 &&
     result.modalOpened &&
     result.sizeRows === 1 &&
     result.sizeInputs === 3 &&
@@ -148,7 +172,13 @@ app.whenReady().then(async () => {
     result.capacityChipsAfter === 2 &&
     result.ordersVisible &&
     result.ordersEmptyShown === false &&
-    result.orderCards === 1 &&
+    result.orderCards === 2 &&
+    result.trackInputs === 2 &&
+    result.cancelButtons === 1 &&
+    result.hasCancelModal &&
+    result.viewsVisible &&
+    result.viewsEmptyShown &&
+    result.hasViewsStats &&
     result.customersVisible &&
     result.customerCards === 1 &&
     result.customerDetailsOpen &&

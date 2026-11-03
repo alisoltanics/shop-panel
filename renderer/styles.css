@@ -281,6 +281,16 @@ select { cursor: pointer; }
 .badge.ok { color: #86efac; border-color: #14532d; background: #0d2a1a; }
 .badge.canceled { color: #fca5a5; border-color: #4c1d1d; background: #2a1010; }
 .order-actions { margin-top: 10px; display: flex; gap: 8px; }
+
+.track-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.track-row input { flex: 1; }
+
+.view-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.view-date { font-weight: 700; font-size: 13.5px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.view-date span { font-weight: 500; color: var(--muted); font-size: 12px; }
+.view-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px dashed rgba(255, 255, 255, 0.06); font-size: 12.5px; }
+.view-name { color: var(--text); }
+.view-meta { color: var(--muted); }
 .order-meta, .order-addr { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .order-items { margin: 10px 0 8px; padding-inline-start: 18px; font-size: 13px; line-height: 1.9; }
 .order-total { font-size: 13px; border-top: 1px solid var(--line); padding-top: 9px; }

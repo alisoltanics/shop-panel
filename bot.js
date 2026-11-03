@@ -268,16 +268,17 @@ async function startBot({
           ...item,
           caption: index === 0 ? productCaption(product) : '',
         }));
-        const sent = await bot.sendMediaGroup(chatId, album, {
-          reply_markup: keyboard,
-          parse_mode: 'HTML',
-        });
+        const sent = await bot.sendMediaGroup(chatId, album, { parse_mode: 'HTML' });
 
         (sent || []).forEach((message, index) => {
           const fileId = message?.photo?.at(-1)?.file_id;
           if (fileId && images[index]) store.setMediaId(messenger, images[index].name, fileId);
         });
-        return;
+
+        // sendMediaGroup از reply_markup پشتیبانی نمی‌کند؛ دکمه‌ها را جدا می‌فرستیم
+        return bot.sendMessage(chatId, '🛒 برای انتخاب ابعاد و افزودن به سبد از دکمه‌های زیر استفاده کنید:', {
+          reply_markup: keyboard,
+        });
       } catch {
         // اگر پیام‌رسان آلبوم را پشتیبانی نکند، با ارسال تکی ادامه می‌دهیم
       }

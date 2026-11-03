@@ -237,7 +237,14 @@ function check(label, condition, extra = '') {
   await cb(`p:${gallery.id}`);
   const album = fake.albums[fake.albums.length - 1];
   check('photos sent as one album', !!album && album.items.length === 2, JSON.stringify(album?.items?.length));
-  check('album carries the product keyboard', !!album?.options?.reply_markup);
+
+  const keyboardMessage = [...fake.sent]
+    .reverse()
+    .find((m) => String(m.chatId) === '42' && m.options?.reply_markup?.inline_keyboard);
+  const pickButton = (keyboardMessage?.options.reply_markup.inline_keyboard || [])
+    .flat()
+    .find((b) => String(b.callback_data).startsWith('pick:'));
+  check('add-to-cart buttons sent after album', !!pickButton);
   check(
     'file ids cached after first send',
     store.getMediaId('telegram', 'img-1.jpg') === 'cached-0',
@@ -251,10 +258,7 @@ function check(label, condition, extra = '') {
     cachedAlbum.items.every((item) => String(item.fileId).startsWith('cached-')),
     JSON.stringify(cachedAlbum.items.map((item) => item.fileId))
   );
-  check(
-    'no more button for small albums',
-    !JSON.stringify(cachedAlbum.options.reply_markup).includes('more:')
-  );
+  check('album itself has no reply markup', !cachedAlbum.options.reply_markup);
 
   const directOrder = store.createOrder({    chatId: '7',
     customer: store.getCustomer(42),

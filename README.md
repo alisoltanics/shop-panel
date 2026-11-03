@@ -8,15 +8,15 @@
 ریپو خصوصی است، پس فایل‌ها را با GitHub CLI بگیرید:
 
 ```bash
-gh release download v1.13.0 -R alisoltanics/shop-panel -D ~/Downloads
-sudo dpkg -i ~/Downloads/ShopPanel-1.13.0-linux-amd64.deb   # نصب در منوی اوبونتو
+gh release download v1.13.1 -R alisoltanics/shop-panel -D ~/Downloads
+sudo dpkg -i ~/Downloads/ShopPanel-1.13.1-linux-amd64.deb   # نصب در منوی اوبونتو
 ```
 
 از بخش [Releases](https://github.com/alisoltanics/shop-panel/releases):
 
-- **Ubuntu / Debian**: `ShopPanel-1.13.0-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
-  یا `ShopPanel-1.13.0-x86_64.AppImage` (بدون نصب: `chmod +x` و اجرا).
-- **Windows**: `ShopPanel-Setup-1.13.0.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
+- **Ubuntu / Debian**: `ShopPanel-1.13.1-linux-amd64.deb` → با دوبار کلیک نصب می‌شود و آیکونش در منوی برنامه‌ها می‌آید.
+  یا `ShopPanel-1.13.1-x86_64.AppImage` (بدون نصب: `chmod +x` و اجرا).
+- **Windows**: `ShopPanel-Setup-1.13.1.exe` (نسخه ۶۴ بیتی). نسخه ویندوز امضای دیجیتال ندارد؛ ممکن است SmartScreen هشدار بدهد (More info → Run anyway).
 
 ## اجرا از سورس
 
@@ -107,6 +107,12 @@ git push --follow-tags
 
 با پوش شدن تگ، GitHub Actions (`.github/workflows/release.yml`) روی `ubuntu-latest` و `windows-latest`
 بیلد می‌گیرد و فایل‌های `.deb`، `.AppImage` و `Setup.exe` را به‌صورت Release منتشر می‌کند.
+
+## عیب‌یابی تایپ
+
+- در لینوکس **وایلند**، ورودی کیبورد فارسی (IME) نیاز به کلید `--enable-wayland-ime` دارد که از نسخه ۱.۱۳.۱ خودکار فعال می‌شود.
+- اسکریپت `npm run install:desktop` اگر fcitx یا ibus نصب باشد، متغیرهای IME را در فایل `.desktop` تنظیم می‌کند.
+- فیلدهای عددی (قیمت، موجودی، هزینه ارسال) حالا **ارقام فارسی و عربی** را هم می‌پذیرند.
 
 ## ساختار
 

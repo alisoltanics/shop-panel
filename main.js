@@ -24,6 +24,11 @@ const videosDir = () => path.join(app.getPath('userData'), 'videos');
 app.setName('ShopPanel');
 app.setAppUserModelId('ir.alisoltani.shoppanel');
 
+// روی لینوکس/Wayland، ورودی کیبورد فارسی (IME) بدون این کلید کار نمی‌کند
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('enable-wayland-ime');
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }

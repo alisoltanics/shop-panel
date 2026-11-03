@@ -17,6 +17,18 @@ let currentSizes = [];
 let editingId = null;
 
 const money = (n) => `${Number(n || 0).toLocaleString('fa-IR')} تومان`;
+
+/** ارقام فارسی/عربی را به انگلیسی تبدیل می‌کند تا فیلدهای عددی با کیبورد فارسی هم کار کنند */
+function toEnglishDigits(value) {
+  return String(value ?? '')
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[،,٬\s]/g, '');
+}
+
+function num(value) {
+  return Number(toEnglishDigits(value)) || 0;
+}
 const imgUrl = (name) => `appimg://img/${encodeURIComponent(name)}`;
 const videoUrl = (name) => `appimg://video/${encodeURIComponent(name)}`;
 
@@ -64,9 +76,12 @@ function askText(title, placeholder = '', initial = '') {
     input.placeholder = placeholder;
     input.value = initial;
     $('#textModal').classList.remove('hidden');
-    setTimeout(() => input.focus(), 60);
+    const focusTimer = setTimeout(() => {
+      if (!$('#textModal').classList.contains('hidden')) input.focus();
+    }, 60);
 
     const finish = (value) => {
+      clearTimeout(focusTimer);
       $('#textModal').classList.add('hidden');
       $('#textModalOk').onclick = null;
       $('#textModalCancel').onclick = null;
@@ -337,6 +352,11 @@ function openModal(product = null) {
   renderVideo();
   renderSizes();
   $('#modal').classList.remove('hidden');
+
+  // فوکوس روی اولین فیلد تا تایپ بلافاصله ممکن باشد
+  setTimeout(() => {
+    if (!$('#modal').classList.contains('hidden')) $('#f-name')?.focus();
+  }, 80);
 }
 
 function closeModal() {
@@ -510,23 +530,22 @@ function renderSizes() {
     color.onchange = () => handleOptionSelect(color, 'color', index);
 
     const price = document.createElement('input');
-    price.type = 'number';
-    price.min = '0';
-    price.step = '1000';
+    price.type = 'text';
+    price.inputMode = 'numeric';
     price.placeholder = 'قیمت';
     price.value = size.price ?? '';
     price.oninput = () => {
-      currentSizes[index].price = Number(price.value) > 0 ? Number(price.value) : null;
+      const value = num(price.value);
+      currentSizes[index].price = value > 0 ? value : null;
     };
 
     const stock = document.createElement('input');
-    stock.type = 'number';
-    stock.min = '0';
-    stock.step = '1';
+    stock.type = 'text';
+    stock.inputMode = 'numeric';
     stock.placeholder = 'موجودی';
     stock.value = size.stock ?? '';
     stock.oninput = () => {
-      currentSizes[index].stock = String(stock.value) === '' ? null : Math.max(0, Number(stock.value) || 0);
+      currentSizes[index].stock = String(stock.value).trim() === '' ? null : Math.max(0, num(stock.value));
     };
 
     const remove = document.createElement('button');
@@ -663,8 +682,8 @@ $('#btnSaveProduct').onclick = async () => {
     id: editingId || undefined,
     name: $('#f-name').value.trim(),
     category: $('#f-category').value,
-    price: Number($('#f-price').value) || 0,
-    stock: Number($('#f-stock').value) || 0,
+    price: num($('#f-price').value),
+    stock: num($('#f-stock').value),
     material: $('#f-material').value.trim(),
     colors: $('#f-colors').value,
     description: $('#f-description').value.trim(),
@@ -765,7 +784,7 @@ $('#btnSaveSettings').onclick = async () => {
   const result = await api.saveSettings({
     shopName: $('#s-shopName').value,
     note: $('#s-note').value,
-    shippingPrice: $('#s-shipping').value,
+    shippingPrice: num($('#s-shipping').value),
     telegram: {
       token: $('#tg-token').value,
       shopChatId: $('#tg-chat').value,

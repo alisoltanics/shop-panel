@@ -156,7 +156,7 @@
           <h2>اطلاعات فروشگاه</h2>
           <p class="hint">این نام در ربات به مشتری نمایش داده می‌شود.</p>
           <label>نام فروشگاه <input id="s-shopName" placeholder="مثلاً: گالری رومیزی آرام" /></label>
-          <label>هزینه ارسال / پست (تومان) <input id="s-shipping" type="number" min="0" step="1000" placeholder="0 — یعنی رایگان" /></label>
+          <label>هزینه ارسال / پست (تومان) <input id="s-shipping" type="text" inputmode="numeric" placeholder="0 — یعنی رایگان" /></label>
           <label>توضیح کوتاه / شرایط ارسال <textarea id="s-note" rows="2" placeholder="ارسال به سراسر کشور…"></textarea></label>
           <div class="row">
             <button class="btn primary" id="btnSaveSettings">ذخیره همه تنظیمات</button>
@@ -269,8 +269,8 @@
                 <button class="btn small" type="button" id="btnNewCat">+ دسته</button>
               </div>
             </label>
-            <label id="priceField">قیمت پایه (تومان) <input id="f-price" type="number" min="0" step="1000" placeholder="850000" /></label>
-            <label id="stockField">موجودی <input id="f-stock" type="number" min="0" step="1" placeholder="10" /></label>
+            <label id="priceField">قیمت پایه (تومان) <input id="f-price" type="text" inputmode="numeric" placeholder="850000" /></label>
+            <label id="stockField">موجودی <input id="f-stock" type="text" inputmode="numeric" placeholder="10" /></label>
             <label>جنس <input id="f-material" placeholder="کتان / مخمل" /></label>
             <label>رنگ‌ها (با کاما) <input id="f-colors" placeholder="کرم، سبز، خاکستری" /></label>
             <label class="span2">توضیحات کامل <textarea id="f-description" rows="4" placeholder="جنس، نحوه شستشو، نکات…"></textarea></label>

@@ -15,6 +15,14 @@ fi
 mkdir -p "$ICON_DIR" "$DESKTOP_DIR"
 install -m 644 "$APP_DIR/build/icon.png" "$ICON_DIR/shop-panel.png"
 
+# ماژول ورودی کیبورد فارسی (fcitx/ibus) را در صورت نصب بودن فعال کن
+IM_ENV=""
+if command -v fcitx5 >/dev/null 2>&1 || command -v fcitx >/dev/null 2>&1; then
+  IM_ENV="env GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx XMODIFIERS=@im=fcitx"
+elif command -v ibus >/dev/null 2>&1; then
+  IM_ENV="env GTK_IM_MODULE=ibus XMODIFIERS=@im=ibus"
+fi
+
 cat > "$DESKTOP_DIR/shop-panel.desktop" <<EOF
 [Desktop Entry]
 Type=Application
@@ -24,7 +32,7 @@ Name[fa]=پنل فروشگاه
 GenericName=Shop Product Manager
 Comment=Manage shop products and Telegram orders
 Comment[fa]=مدیریت محصولات و سفارش‌های تلگرام
-Exec="$ELECTRON" "$APP_DIR" --no-sandbox %U
+Exec=$IM_ENV "$ELECTRON" "$APP_DIR" --no-sandbox %U
 Icon=$ICON_DIR/shop-panel.png
 Terminal=false
 Categories=Office;Utility;

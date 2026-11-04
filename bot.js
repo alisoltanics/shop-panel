@@ -250,15 +250,7 @@ async function startBot({
     const current = Math.min(Math.max(0, Number(page) || 0), pages - 1);
     const rows = list
       .slice(current * perPage, current * perPage + perPage)
-      .map((p) => {
-        const prices = [
-          Number(p.price) || 0,
-          ...sizesOf(p).map((s) => Number(s.price) || 0),
-          ...Object.values(p.variantPrices || {}).map((v) => Number(v) || 0),
-        ].filter((v) => v > 0);
-        const cheapest = prices.length ? Math.min(...prices) : 0;
-        return [{ text: `${p.name} | ${money(cheapest)}`, callback_data: `p:${p.id}` }];
-      });
+      .map((p) => [{ text: p.name, callback_data: `p:${p.id}` }]);
 
     if (pages > 1) {
       const nav = [];

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   removeCategory: (name) => ipcRenderer.invoke('categories:remove', name),
   listOrders: () => ipcRenderer.invoke('orders:list'),
   cancelOrder: (id, reason) => ipcRenderer.invoke('orders:cancel', id, reason),
+  deleteOrder: (id) => ipcRenderer.invoke('orders:delete', id),
   setOrderTracking: (id, code) => ipcRenderer.invoke('orders:tracking', id, code),
   listViews: () => ipcRenderer.invoke('views:list'),
   listAbuse: () => ipcRenderer.invoke('abuse:list'),

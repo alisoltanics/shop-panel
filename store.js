@@ -405,6 +405,15 @@ class Store {
     return order;
   }
 
+  /** حذف کامل سفارش از فهرست (بدون تغییر موجودی) */
+  deleteOrder(id) {
+    const index = this.data.orders.findIndex((o) => o.id === Number(id));
+    if (index === -1) return false;
+    this.data.orders.splice(index, 1);
+    this.save();
+    return true;
+  }
+
   /** ثبت کد رهگیری پست روی سفارش */
   setOrderTracking(id, code) {
     const order = this.getOrder(id);

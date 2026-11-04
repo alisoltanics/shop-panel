@@ -306,6 +306,8 @@ function registerIpc() {
     return order;
   });
 
+  ipcMain.handle('orders:delete', (_e, id) => store.deleteOrder(id));
+
   ipcMain.handle('orders:tracking', async (_e, id, code) => {
     const order = store.setOrderTracking(id, code);
     if (!order) return { order: null, sent: false };

@@ -40,6 +40,11 @@ ipcMain.handle('orders:list', () => [
   },
 ]);
 ipcMain.handle('orders:cancel', () => ({}));
+const deletedOrderIds = [];
+ipcMain.handle('orders:delete', (_e, id) => {
+  deletedOrderIds.push(Number(id));
+  return true;
+});
 ipcMain.handle('orders:tracking', () => ({ order: {}, sent: false }));
 ipcMain.handle('views:list', () => []);
 ipcMain.handle('abuse:list', () => [
@@ -144,8 +149,29 @@ app.whenReady().then(async () => {
     out.ordersEmptyShown = !document.getElementById('ordersEmpty').classList.contains('hidden');
     out.orderCards = document.querySelectorAll('.order-card').length;
     out.trackInputs = document.querySelectorAll('.track-row input').length;
-    out.cancelButtons = document.querySelectorAll('#ordersList .order-actions .btn').length;
+    out.orderActionButtons = document.querySelectorAll('#ordersList .order-actions .btn').length;
+    out.deleteButtons = [...document.querySelectorAll('#ordersList .order-actions .btn')].filter(
+      (btn) => btn.textContent === 'حذف سفارش'
+    ).length;
     out.hasCancelModal = !!document.getElementById('cancelConfirm');
+
+    const firstDelete = [...document.querySelectorAll('#ordersList .order-actions .btn')].find(
+      (btn) => btn.textContent === 'حذف سفارش'
+    );
+    firstDelete.click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    out.confirmModalOpen = !document.getElementById('confirmModal').classList.contains('hidden');
+    out.confirmTitle = document.getElementById('confirmTitle').textContent;
+    out.confirmDetail = document.getElementById('confirmDetail').textContent;
+    out.confirmDanger = document.querySelector('#confirmModal .confirm-box').classList.contains('danger');
+    document.getElementById('confirmCancel').click();
+    out.confirmModalClosed = document.getElementById('confirmModal').classList.contains('hidden');
+
+    firstDelete.click();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    document.getElementById('confirmOk').click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    out.confirmModalClosedAfterOk = document.getElementById('confirmModal').classList.contains('hidden');
 
     document.querySelector('[data-tab="customers"]').click();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -195,8 +221,17 @@ app.whenReady().then(async () => {
     result.ordersEmptyShown === false &&
     result.orderCards === 2 &&
     result.trackInputs === 2 &&
-    result.cancelButtons === 1 &&
+    result.orderActionButtons === 3 &&
+    result.deleteButtons === 2 &&
     result.hasCancelModal &&
+    result.confirmModalOpen &&
+    result.confirmTitle === 'حذف سفارش' &&
+    result.confirmDetail.includes('علی') &&
+    result.confirmDanger &&
+    result.confirmModalClosed &&
+    result.confirmModalClosedAfterOk &&
+    deletedOrderIds.length === 1 &&
+    deletedOrderIds[0] === 1 &&
     result.viewsVisible &&
     result.viewsEmptyShown &&
     result.hasViewsStats &&

@@ -343,6 +343,26 @@
       </div>
     </div>
 
+    <!-- دیالوگ تأیید -->
+    <div class="modal hidden" id="confirmModal">
+      <div
+        class="modal-box compact confirm-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirmTitle"
+        aria-describedby="confirmMessage"
+      >
+        <div class="confirm-icon" id="confirmIcon">⚠️</div>
+        <h2 id="confirmTitle">تأیید عملیات</h2>
+        <p class="confirm-message" id="confirmMessage"></p>
+        <div class="confirm-detail hidden" id="confirmDetail"></div>
+        <div class="confirm-actions">
+          <button class="btn danger" id="confirmOk">تأیید</button>
+          <button class="btn" id="confirmCancel">انصراف</button>
+        </div>
+      </div>
+    </div>
+
     <!-- دیالوگ ورودی متن -->
     <div class="modal hidden" id="textModal">
       <div class="modal-box compact">

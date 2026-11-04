@@ -100,6 +100,59 @@ function askText(title, placeholder = '', initial = '') {
   });
 }
 
+/* ---------------- دیالوگ تأیید ---------------- */
+function askConfirm({
+  title,
+  message = '',
+  detail = '',
+  confirmText = 'تأیید',
+  cancelText = 'انصراف',
+  danger = false,
+  icon = '⚠️',
+} = {}) {
+  return new Promise((resolve) => {
+    const modal = $('#confirmModal');
+    const ok = $('#confirmOk');
+    const cancel = $('#confirmCancel');
+    const detailEl = $('#confirmDetail');
+
+    $('#confirmTitle').textContent = title;
+    $('#confirmMessage').textContent = message;
+    $('#confirmIcon').textContent = icon;
+    detailEl.textContent = detail;
+    detailEl.classList.toggle('hidden', !detail);
+    ok.textContent = confirmText;
+    cancel.textContent = cancelText;
+    ok.className = `btn ${danger ? 'danger' : 'primary'}`;
+    modal.querySelector('.confirm-box').classList.toggle('danger', danger);
+    modal.classList.remove('hidden');
+
+    let focusTimer = null;
+    const finish = (value) => {
+      clearTimeout(focusTimer);
+      modal.classList.add('hidden');
+      ok.onclick = null;
+      cancel.onclick = null;
+      modal.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') finish(false);
+    };
+
+    ok.onclick = () => finish(true);
+    cancel.onclick = () => finish(false);
+    modal.onclick = (event) => {
+      if (event.target === modal) finish(false);
+    };
+    document.addEventListener('keydown', onKey);
+
+    // برای عملیات مخرب، پیش‌فرض روی «انصراف» است تا با Enter اتفاقی تأیید نشود
+    focusTimer = setTimeout(() => (danger ? cancel : ok).focus(), 60);
+  });
+}
+
 /* ---------------- داده‌ها ---------------- */
 async function loadProducts() {
   products = await api.listProducts();
@@ -174,7 +227,14 @@ function renderCategories() {
     remove.textContent = '✕';
     remove.title = 'حذف دسته';
     remove.onclick = async () => {
-      if (!confirm(`دسته «${name}» حذف شود؟ محصولات آن بدون تغییر می‌مانند.`)) return;
+      const confirmed = await askConfirm({
+        title: 'حذف دسته‌بندی',
+        message: `دسته «${name}» حذف شود؟ محصولات آن بدون تغییر می‌مانند.`,
+        confirmText: 'حذف دسته',
+        danger: true,
+        icon: '🗂️',
+      });
+      if (!confirmed) return;
       categories = await api.removeCategory(name);
       renderCategories();
       renderGrid();
@@ -284,7 +344,15 @@ function renderGrid() {
     delBtn.className = 'btn danger-ghost';
     delBtn.textContent = 'حذف';
     delBtn.onclick = async () => {
-      if (!confirm(`«${p.name}» حذف شود؟`)) return;
+      const confirmed = await askConfirm({
+        title: 'حذف محصول',
+        message: `«${p.name}» برای همیشه از کاتالوگ حذف شود؟`,
+        detail: `${p.category || 'بدون دسته'} • موجودی ${effectiveStock(p)}`,
+        confirmText: 'حذف محصول',
+        danger: true,
+        icon: '📦',
+      });
+      if (!confirmed) return;
       await api.deleteProduct(p.id);
       await loadProducts();
       toast('محصول حذف شد');
@@ -605,7 +673,15 @@ function renderOptionChips(kind, list) {
     remove.textContent = '✕';
     remove.title = 'حذف گزینه';
     remove.onclick = async () => {
-      if (!confirm(`گزینه «${value}» حذف شود؟`)) return;
+      const confirmed = await askConfirm({
+        title: 'حذف گزینه',
+        message: `گزینه «${value}» از لیست حذف شود؟`,
+        detail: 'این گزینه فقط از لیست انتخاب‌ها پاک می‌شود و ابعاد ثبت‌شده محصولات تغییری نمی‌کنند.',
+        confirmText: 'حذف گزینه',
+        danger: true,
+        icon: '🏷️',
+      });
+      if (!confirmed) return;
       setOptionList(kind, await api.removeOption(kind, value));
       renderOptions();
       toast('گزینه حذف شد');
@@ -900,16 +976,42 @@ function renderOrders(orders) {
       card.appendChild(track);
     }
 
+    const actions = document.createElement('div');
+    actions.className = 'order-actions';
+
     if (order.status === 'pending') {
-      const actions = document.createElement('div');
-      actions.className = 'order-actions';
       const cancel = document.createElement('button');
       cancel.className = 'btn small danger-ghost';
       cancel.textContent = 'لغو سفارش';
       cancel.onclick = () => openCancelModal(order);
       actions.appendChild(cancel);
-      card.appendChild(actions);
     }
+
+    const remove = document.createElement('button');
+    remove.className = 'btn small danger-ghost';
+    remove.textContent = 'حذف سفارش';
+    remove.onclick = async () => {
+      const confirmed = await askConfirm({
+        title: 'حذف سفارش',
+        message: `سفارش #${order.code} برای همیشه از لیست حذف شود؟ این عملیات قابل بازگشت نیست و پیامی برای مشتری ارسال نمی‌شود.`,
+        detail: `${order.customer.name} • ${money(order.total)} • ${formatDate(order.createdAt)}`,
+        confirmText: 'بله، حذف کن',
+        danger: true,
+        icon: '🗑️',
+      });
+      if (!confirmed) return;
+
+      try {
+        const deleted = await api.deleteOrder(order.id);
+        if (!deleted) return toast('این سفارش پیدا نشد', true);
+        toast('سفارش حذف شد');
+        await loadOrders();
+      } catch (err) {
+        toast(err.message || 'خطا در حذف سفارش', true);
+      }
+    };
+    actions.appendChild(remove);
+    card.appendChild(actions);
 
     wrap.appendChild(card);
   });
@@ -1180,7 +1282,17 @@ function renderAbuse(reports) {
     action.className = `btn small ${report.blocked ? '' : 'danger-ghost'}`;
     action.textContent = report.blocked ? '✅ رفع مسدودی' : '🚫 بلاک از ربات';
     action.onclick = async () => {
-      if (!report.blocked && !confirm(`کاربر «${report.name || report.chatId}» از ربات بلاک شود؟`)) return;
+      if (!report.blocked) {
+        const confirmed = await askConfirm({
+          title: 'مسدودسازی کاربر',
+          message: `کاربر «${report.name || report.chatId}» از ربات بلاک شود؟`,
+          detail: 'این کاربر دیگر نمی‌تواند از ربات خرید کند.',
+          confirmText: 'بلاک کن',
+          danger: true,
+          icon: '🚫',
+        });
+        if (!confirmed) return;
+      }
 
       const updated = report.blocked
         ? await api.unblockUser(report.chatId)
